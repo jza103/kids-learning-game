@@ -10,7 +10,7 @@ Read `README.md` first (status, decisions, where we left off). Open `recon.md` a
 - **Game-first:** the game should be genuinely fun; heavy game-to-learning ratio is intentional.
 - **Hard no:** purchases, ads, upsells, streak-loss guilt, leaderboards between kids.
 - **Progress stays on the device** (IndexedDB/localStorage). No accounts, servers or sync for now.
-- Randomized rewards are undecided; follow the candidate rules in `appeal-analysis.md` if prototyping them.
+- Randomized rewards: packs with rarity, kept mild (see README "Decisions"). Odds shown, pity guarantees, daily cap, no duds, coins only from correct answers.
 
 ## Working style
 - Be token-efficient: read only the files a task needs; don't read lockfiles, build output or `node_modules`.
