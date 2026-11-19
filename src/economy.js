@@ -1,6 +1,6 @@
 // Coins, packs, shards and crafting. All functions are pure: they take a
 // profile and return a new one, so they're easy to test.
-import { THEMES, ITEMS_BY_ID } from './content.js';
+import { THEMES, ITEMS_BY_ID, ALL_ITEMS } from './content.js';
 import { weightedPick, dayKey } from './rng.js';
 
 // --- Coins: earned per correct answer, never for just finishing a round. ---
@@ -104,6 +104,7 @@ export function craft(profile, itemId) {
   if (!item) throw new Error(`unknown item: ${itemId}`);
   if (profile.collection[itemId]) throw new Error('already owned');
   const cost = CRAFT_COST[item.rarity];
+  if (cost === undefined) throw new Error('only from super packs');
   if (profile.shards < cost) throw new Error('not enough shards');
   return {
     ...profile,
@@ -115,4 +116,49 @@ export function craft(profile, itemId) {
 export function themeProgress(theme, collection) {
   const owned = theme.items.filter((i) => collection[i.id]).length;
   return { owned, total: theme.items.length, complete: owned === theme.items.length };
+}
+
+// --- Mastery rewards and Super Packs ---
+// The big rewards come from mastering words (reaching the top box for the
+// first time), not from grinding answers.
+export const MASTERY_COINS = 30;
+export const SUPER_PACK_EVERY = 5; // mastered words per Super Pack
+export const SUPER_PACK_SHARDS = 150; // if every ultra is already owned
+
+/** Pay the one-time reward for newly mastering a word. */
+export function rewardMastery(profile) {
+  const progress = (profile.superProgress || 0) + 1;
+  const earned = Math.floor(progress / SUPER_PACK_EVERY);
+  return {
+    ...profile,
+    coins: profile.coins + MASTERY_COINS,
+    masteredWords: (profile.masteredWords || 0) + 1,
+    superProgress: progress % SUPER_PACK_EVERY,
+    superPacks: (profile.superPacks || 0) + earned,
+  };
+}
+
+/**
+ * Open a Super Pack: a guaranteed ultra from the chosen theme. If that theme's
+ * ultras are all owned, any missing ultra; then any missing friend in the
+ * theme; and if the whole collection is done, shards. Not limited by the daily cap.
+ */
+export function openSuperPack(profile, themeId, rng = Math.random) {
+  if (!(profile.superPacks > 0)) throw new Error('no super packs');
+  const theme = THEMES.find((t) => t.id === themeId);
+  if (!theme) throw new Error(`unknown theme: ${themeId}`);
+  const missing = (items) => items.filter((i) => !profile.collection[i.id]);
+  const pool =
+    [missing(theme.items.filter((i) => i.rarity === 'ultra')), missing(ALL_ITEMS.filter((i) => i.rarity === 'ultra')), missing(theme.items)].find(
+      (p) => p.length,
+    ) || [];
+  const next = { ...profile, superPacks: profile.superPacks - 1 };
+  if (!pool.length) {
+    return { profile: { ...next, shards: profile.shards + SUPER_PACK_SHARDS }, result: { item: null, shards: SUPER_PACK_SHARDS, super: true } };
+  }
+  const item = pool[Math.floor(rng() * pool.length)];
+  return {
+    profile: { ...next, collection: { ...profile.collection, [item.id]: 1 } },
+    result: { item, rarity: item.rarity, duplicate: false, shards: 0, super: true, themeId: item.theme || themeId },
+  };
 }

@@ -1,7 +1,7 @@
 // Per-kid profile: their word list, spaced-repetition state, wallet,
 // collection and cosmetics.
-import { newItem, review } from './srs.js';
-import { coinsForAnswer, newPackState } from './economy.js';
+import { newItem, review, isDue, pickNext } from './srs.js';
+import { coinsForAnswer, newPackState, rewardMastery } from './economy.js';
 import { XP_PER, applyXpBoost } from './progress.js';
 
 export function newProfile(name, now, id = `kid-${now.toString(36)}`) {
@@ -9,8 +9,9 @@ export function newProfile(name, now, id = `kid-${now.toString(36)}`) {
     id,
     name: name.trim() || 'Player',
     createdAt: now,
-    words: [], // [{ id, word, sentence }]
-    srs: {}, // id -> srs item; kept across weeks so returning words keep progress
+    words: [], // word bank, grows each week: [{ id, word, sentence, addedAt, batch }]
+    currentBatch: null, // `batch` of this week's words
+    srs: {}, // id -> srs item (also the word's mastery rating)
     coins: 0,
     shards: 0,
     xp: 0,
@@ -18,6 +19,9 @@ export function newProfile(name, now, id = `kid-${now.toString(36)}`) {
     collection: {}, // itemId -> count
     team: [],
     completedSets: [],
+    masteredWords: 0,
+    superProgress: 0, // mastered words toward the next Super Pack
+    superPacks: 0,
     look: { color: 'color-sky', hero: 'hero-cat', hat: null },
     stats: { answered: 0, correct: 0 },
   };
@@ -67,15 +71,75 @@ export function parseWordList(text) {
   return out;
 }
 
-/** Replace this week's list. Progress on words seen before is kept. */
-export function setWords(profile, entries, now) {
+/**
+ * Add this week's words to the bank. New words join the bank; words already
+ * in it keep their mastery and are brought back into this week's set.
+ */
+export function addWords(profile, entries, now) {
+  const batch = now;
+  const words = profile.words.map((w) => ({ ...w }));
   const srs = { ...profile.srs };
-  for (const e of entries) if (!srs[e.id]) srs[e.id] = newItem(e.id, now);
-  return { ...profile, words: entries, srs };
+  let added = 0;
+  let returning = 0;
+  for (const e of entries) {
+    const existing = words.find((w) => w.id === e.id);
+    if (existing) {
+      existing.batch = batch;
+      if (e.sentence) existing.sentence = e.sentence;
+      returning++;
+    } else {
+      words.push({ ...e, addedAt: now, batch });
+      added++;
+    }
+    if (!srs[e.id]) srs[e.id] = newItem(e.id, now);
+  }
+  return { profile: { ...profile, words, srs, currentBatch: batch }, added, returning };
+}
+
+export function removeWord(profile, wordId) {
+  return { ...profile, words: profile.words.filter((w) => w.id !== wordId) };
+}
+
+/** Bring a profile saved by an older version up to date. */
+export function migrateProfile(p) {
+  const out = { masteredWords: 0, superProgress: 0, superPacks: 0, ...p };
+  if (out.currentBatch == null) {
+    const batch = out.createdAt || 1;
+    out.words = out.words.map((w) => ({ addedAt: batch, batch, ...w }));
+    out.currentBatch = batch;
+  }
+  return out;
+}
+
+export function currentWords(profile) {
+  return profile.words.filter((w) => w.batch === profile.currentBatch);
 }
 
 export function activeItems(profile) {
   return profile.words.map((w) => profile.srs[w.id]).filter(Boolean);
+}
+
+// Older words come back now and then for review, but this week's words lead.
+export const REVIEW_CHANCE = 0.2;
+export const REVIEW_CHANCE_WHEN_IDLE = 0.6; // when nothing this week is due
+export const MAX_REVIEW_PER_ROUND = 3;
+
+/**
+ * Pick the next word for a round. Mostly this week's words (weighted by the
+ * scheduler); sometimes a due word from earlier weeks.
+ */
+export function pickPracticeWord(profile, now, rng = Math.random, recent = [], reviewUsed = 0) {
+  const current = currentWords(profile).map((w) => profile.srs[w.id]).filter(Boolean);
+  const currentIds = new Set(current.map((i) => i.id));
+  const reviewDue = activeItems(profile).filter((i) => !currentIds.has(i.id) && i.seen > 0 && isDue(i, now) && !recent.includes(i.id));
+  const currentBusy = current.some((i) => i.seen === 0 || isDue(i, now));
+  const chance = currentBusy ? REVIEW_CHANCE : REVIEW_CHANCE_WHEN_IDLE;
+  if (reviewDue.length && reviewUsed < MAX_REVIEW_PER_ROUND && (!current.length || rng() < chance)) {
+    return { item: pickNext(reviewDue, now, rng, recent), review: true };
+  }
+  const pool = current.length ? current : activeItems(profile);
+  const item = pickNext(pool, now, rng, recent);
+  return item ? { item, review: false } : null;
 }
 
 /**
@@ -86,19 +150,19 @@ export function recordAnswer(profile, wordId, result, now, powers = { xp: 0 }) {
   const before = profile.srs[wordId];
   if (!before) throw new Error(`unknown word: ${wordId}`);
   const coins = coinsForAnswer(before, result);
-  const xp = applyXpBoost(XP_PER[result], powers);
-  return {
-    profile: {
-      ...profile,
-      srs: { ...profile.srs, [wordId]: review(before, result, now) },
-      coins: profile.coins + coins,
-      xp: profile.xp + xp,
-      stats: {
-        answered: profile.stats.answered + 1,
-        correct: profile.stats.correct + (result === 'correct' ? 1 : 0),
-      },
+  const after = review(before, result, now);
+  const mastered = before.masteredAt == null && after.masteredAt != null;
+  const xp = applyXpBoost(XP_PER[result] + (mastered ? XP_PER.mastered : 0), powers);
+  let next = {
+    ...profile,
+    srs: { ...profile.srs, [wordId]: after },
+    coins: profile.coins + coins,
+    xp: profile.xp + xp,
+    stats: {
+      answered: profile.stats.answered + 1,
+      correct: profile.stats.correct + (result === 'correct' ? 1 : 0),
     },
-    coins,
-    xp,
   };
+  if (mastered) next = rewardMastery(next);
+  return { profile: next, coins, xp, mastered };
 }

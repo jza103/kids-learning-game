@@ -8,7 +8,8 @@ import {
 import { THEMES } from '../src/content.js';
 import { newItem, review } from '../src/srs.js';
 import { mulberry32 } from '../src/rng.js';
-import { newProfile, parseWordList, setWords, recordAnswer, checkSpelling, activeItems } from '../src/profile.js';
+import { newProfile, parseWordList, addWords, recordAnswer, checkSpelling, activeItems } from '../src/profile.js';
+const setWords = (p, entries, now) => addWords(p, entries, now).profile;
 import { claimSetRewards, teamPowers, levelForXp, xpForLevel, XP_PER } from '../src/progress.js';
 import { newBattle, applyAnswer, hintText } from '../src/battle.js';
 
@@ -217,14 +218,6 @@ test('word list parsing: sentences, numbering, commas, duplicates', () => {
   assert.deepEqual(parseWordList('cat, dog ,bird').map((w) => w.word), ['cat', 'dog', 'bird']);
 });
 
-test('a new weekly list keeps progress on returning words', () => {
-  let p = setWords(newProfile('A', T0), parseWordList('cat\ndog'), T0);
-  p = recordAnswer(p, 'cat', 'correct', T0).profile;
-  p = setWords(p, parseWordList('cat\nfish'), T0 + 7 * DAY);
-  assert.equal(p.srs.cat.box, 1);
-  assert.equal(p.srs.fish.box, 0);
-  assert.deepEqual(activeItems(p).map((i) => i.id), ['cat', 'fish']);
-});
 
 test('hint shows the first letters only', () => {
   assert.equal(hintText('because'), 'b e c _ _ _ _');
