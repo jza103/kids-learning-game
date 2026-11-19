@@ -24,7 +24,7 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - **Coins** (`src/economy.js`): only from correct answers, by box before answering (15/12/10/8/5/2), +5 for getting a recently missed word right, half for hinted answers.
 - **Mastery = big rewards:** the first time a word reaches 5 stars, it pays 30 coins and 50 XP, and every 5 mastered words earn a **Super Pack** with a guaranteed **ultra** friend (2 per theme; not craftable, not in normal packs, not limited by the daily cap).
 - **Packs:** 60 coins, 3 per day, kid picks a theme (Ocean, Space, Forest; 10 friends each). Odds shown (65/28/7%). Rare+ guaranteed every 4 packs, epic every 12. Missing friends come before duplicates; duplicates give shards; shards craft any missing friend, so every set can be finished.
-- **Voice:** best installed English voice (Premium > Enhanced > others), with a picker and speed slider for grown-ups. AI voice options: `docs/voice-options.md`.
+- **Voice:** optional natural AI voice from ElevenLabs (Jason's choice, 2026-11-19). The parent pastes an API key on the grown-ups screen; the key stays on the device and is left out of backups. Audio for each word and sentence is fetched once, saved in Cache Storage (`spelling-audio`, kept across app updates), and played offline. Anything without saved audio falls back to the best built-in voice. Note: iPad Safari doesn't expose downloaded Premium voices to web pages (WebKit bug 237584). Background: `docs/voice-options.md`.
 - **Collectibles have a purpose:** up to 3 on your team give powers (hints, damage, shields, XP boost). Finishing a theme gives a title and XP.
 - **XP / Locker:** cosmetic only (hero, hat, color, title).
 
@@ -48,7 +48,7 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 ## Where we left off
 - Last done (2026-11-19): went live on GitHub Pages; then added the growing word bank with mastery stars, mastery-driven Super Packs with ultra friends, and better voice selection, all from Jason's first feedback.
 - Next:
-  1. Jason: download a Premium iPad voice, then decide whether to add AI voices (`docs/voice-options.md`).
+  1. Jason: create an ElevenLabs key and paste it in grown-ups → Voice; check the kids like the voice.
   2. Play with the kids and tune the numbers in `src/economy.js`, `src/profile.js` (review mix) and `src/progress.js`.
   3. Math facts mode (same item model and scheduler).
 - Open questions:
@@ -59,7 +59,7 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - `index.html`, `styles.css`, `src/app.js` — the app UI
 - `src/srs.js`, `src/economy.js`, `src/progress.js`, `src/battle.js`, `src/profile.js` — game and learning logic (pure, tested in `test/`)
 - `src/content.js` — collectibles, monsters, cosmetics
-- `src/voices.js`, `src/speech.js` — voice ranking and speech
+- `src/voices.js`, `src/speech.js`, `src/aivoice.js` — built-in voice ranking, speech playback, ElevenLabs audio
 - `docs/voice-options.md` — AI voice options for a decision
 - `sw.js`, `manifest.webmanifest`, `icons/` — offline and install support
 - `recon.md` — competitor notes, dark patterns to avoid, basic design ideas

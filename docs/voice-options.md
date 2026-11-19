@@ -30,3 +30,6 @@ Trade-offs:
 
 ## Recommendation
 ~~Download a Premium voice first.~~ That isn't possible from Safari. Use pre-generated AI audio (OpenAI or ElevenLabs).
+
+## Decision (2026-11-19)
+Jason chose **ElevenLabs**. It's built as described above: the key goes on the grown-ups screen, and audio is cached in Cache Storage with the built-in voice as fallback.

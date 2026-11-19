@@ -9,7 +9,7 @@ Read `README.md` first (status, decisions, where we left off). Open `recon.md` a
 - **Platform:** PWA, installable on iPad via Safari. Must work offline (service worker). Use Web Speech API for reading words aloud.
 - **Game-first:** the game should be genuinely fun; heavy game-to-learning ratio is intentional.
 - **Hard no:** purchases, ads, upsells, streak-loss guilt, leaderboards between kids.
-- **Progress stays on the device** (IndexedDB/localStorage). No accounts, servers or sync for now.
+- **Progress stays on the device** (IndexedDB/localStorage). No accounts, servers or sync for now. The one outside service is the optional ElevenLabs voice: only words/sentences are sent, the key stays on the device.
 - Randomized rewards: packs with rarity, kept mild (see README "Decisions"). Odds shown, pity guarantees, daily cap, no duds, coins only from correct answers.
 
 ## Working style

@@ -1,7 +1,7 @@
 // Offline support: precache the app shell, then serve from cache and refresh
 // the cache in the background (stale-while-revalidate), so updates show up on
 // the next launch. Bump VERSION when adding or removing files.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = `spelling-${VERSION}`;
 const SHELL = [
   './',
@@ -22,6 +22,7 @@ const SHELL = [
   './src/srs.js',
   './src/storage.js',
   './src/voices.js',
+  './src/aivoice.js',
 ];
 
 self.addEventListener('install', (event) => {
@@ -32,7 +33,8 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      // Keep saved voice clips (spelling-audio) across app updates.
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== 'spelling-audio').map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
