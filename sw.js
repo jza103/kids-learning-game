@@ -1,7 +1,7 @@
 // Offline support: precache the app shell, then serve from cache and refresh
 // the cache in the background (stale-while-revalidate), so updates show up on
 // the next launch. Bump VERSION when adding or removing files.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `spelling-${VERSION}`;
 const SHELL = [
   './',
@@ -21,6 +21,7 @@ const SHELL = [
   './src/speech.js',
   './src/srs.js',
   './src/storage.js',
+  './src/voices.js',
 ];
 
 self.addEventListener('install', (event) => {

@@ -2,7 +2,7 @@
 import { ITEMS_BY_ID, RARITY_STRENGTH, COSMETICS, THEMES } from './content.js';
 import { themeProgress } from './economy.js';
 
-export const XP_PER = { correct: 10, assisted: 4, wrong: 2, monster: 25, setComplete: 200 };
+export const XP_PER = { correct: 10, assisted: 4, wrong: 2, monster: 25, mastered: 50, setComplete: 200 };
 export const TEAM_SIZE = 3;
 
 /** Total XP needed to reach `level` (level 1 = 0, 2 = 100, 3 = 300, 4 = 600...). */

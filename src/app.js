@@ -1,21 +1,29 @@
 // UI for Spelling Quest. Plain DOM, no framework or build step.
 import { THEMES, ITEMS_BY_ID, POWER_INFO, RARITY_STRENGTH, COSMETICS, MONSTERS } from './content.js';
-import { pickNext, masterySummary, isMastered, MAX_BOX } from './srs.js';
+import { masterySummary, masteryRating, MAX_BOX } from './srs.js';
 import {
   BOX_COINS, COMEBACK_BONUS, PACK_COST, DAILY_PACK_CAP, ODDS, CRAFT_COST, SHARDS_FOR_DUPLICATE,
   RARE_PITY, EPIC_PITY, canOpenPack, openPack, craft, packsLeftToday, pityStatus, themeProgress,
+  MASTERY_COINS, SUPER_PACK_EVERY, openSuperPack,
 } from './economy.js';
 import {
   XP_PER, TEAM_SIZE, teamPowers, levelProgress, levelForXp, unlockedCosmetics, applyXpBoost,
   claimSetRewards, earnedTitles,
 } from './progress.js';
 import { newBattle, applyAnswer, roundOver, hintText, ROUND_LENGTH } from './battle.js';
-import { newProfile, parseWordList, setWords, activeItems, recordAnswer, checkSpelling } from './profile.js';
+import {
+  newProfile, parseWordList, addWords, removeWord, migrateProfile, currentWords, activeItems, recordAnswer, checkSpelling,
+  pickPracticeWord,
+} from './profile.js';
 import { load, save, requestPersistence, exportBackup, parseBackup } from './storage.js';
-import { say, speechAvailable } from './speech.js';
+import { say, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged } from './speech.js';
+import { voiceQuality } from './voices.js';
 
 const app = document.getElementById('app');
 let data = load();
+for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
+data.settings = { voiceURI: null, rate: 0.85, ...(data.settings || {}) };
+setSpeechPrefs(data.settings);
 const ui = { screen: 'home', game: null, reveal: null, packTheme: null, parentKid: null, flash: '' };
 
 // ---------- helpers ----------
@@ -65,6 +73,19 @@ function collectibleCard(item, { owned = true, extra = '', cls = '' } = {}) {
   </div>`;
 }
 
+function starsHtml(item) {
+  const { stars, label } = masteryRating(item);
+  return `<span class="stars" title="${label}">${'★'.repeat(stars)}<span class="off">${'★'.repeat(MAX_BOX - stars)}</span></span>`;
+}
+
+function superProgressHtml(p) {
+  const n = p.superProgress || 0;
+  return `<div class="super-progress"><span>🌟 Super Pack</span>
+    <span class="dots">${'●'.repeat(n)}<span class="off">${'●'.repeat(SUPER_PACK_EVERY - n)}</span></span>
+    <span class="small muted">Master ${SUPER_PACK_EVERY - n} more word${SUPER_PACK_EVERY - n === 1 ? '' : 's'}</span>
+    ${p.superPacks ? `<button class="super" data-action="go" data-to="packs">Open ${p.superPacks} Super Pack${p.superPacks > 1 ? 's' : ''}!</button>` : ''}</div>`;
+}
+
 function floatText(text) {
   const el = document.createElement('div');
   el.className = 'float';
@@ -93,7 +114,8 @@ const screens = {
   hub() {
     const p = profile();
     const lp = levelProgress(p.xp);
-    const sum = masterySummary(activeItems(p));
+    const week = currentWords(p);
+    const weekSum = masterySummary(week.map((w) => p.srs[w.id]).filter(Boolean));
     return `<div class="topbar">
         <button class="ghost" data-action="go" data-to="home">Switch player</button>
         <div class="row"><span class="pill">🪙 ${p.coins}</span><span class="pill">💎 ${p.shards}</span></div>
@@ -109,13 +131,15 @@ const screens = {
       </div>
       ${
         p.words.length
-          ? `<p class="muted">This week: ${p.words.length} words · ${sum.mastered} mastered</p>`
+          ? `<p class="muted">This week: ${week.length} words · ${weekSum.mastered} mastered · ${p.masteredWords || 0} mastered all time</p>`
           : `<p class="muted">No words yet. Ask a grown-up to add this week's list.</p>`
       }
       <button class="big" style="width:100%;margin-bottom:16px" data-action="play" ${p.words.length ? '' : 'disabled'}>⚔️ Play</button>
+      <div class="card">${superProgressHtml(p)}</div>
       <div class="menu">
         <button class="secondary" data-action="go" data-to="packs"><span class="icon">🎁</span>Packs</button>
         <button class="secondary" data-action="go" data-to="book"><span class="icon">📖</span>Collection</button>
+        <button class="secondary" data-action="go" data-to="words"><span class="icon">📝</span>My words</button>
         <button class="secondary" data-action="go" data-to="locker"><span class="icon">🎨</span>Locker</button>
       </div>
       <div style="margin-top:24px">${parentButton()}</div>`;
@@ -142,12 +166,20 @@ const screens = {
   summary() {
     const g = ui.game;
     const p = profile();
-    const missed = [...g.missed].map((id) => p.words.find((w) => w.id === id)?.word).filter(Boolean);
+    const wordOf = (id) => p.words.find((w) => w.id === id)?.word;
+    const missed = [...g.missed].map(wordOf).filter(Boolean);
+    const mastered = g.mastered.map(wordOf).filter(Boolean);
     return `<h1>Round done! 🎉</h1>
       <div class="card">
         <div class="row" style="font-size:1.3rem;gap:24px">
           <span>🪙 +${g.earned.coins}</span><span>⭐ +${g.earned.xp} XP</span><span>👾 ${g.battle.defeated} defeated</span>
         </div>
+        ${
+          mastered.length
+            ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((w) => `“${esc(w)}”`).join(', ')}!</strong> +${MASTERY_COINS * mastered.length} 🪙</p>`
+            : ''
+        }
+        ${superProgressHtml(p)}
         ${g.levelUp ? `<p style="font-size:1.3rem"><strong>Level up! You're level ${levelForXp(p.xp)}.</strong> Check the Locker for new stuff.</p>` : ''}
       </div>
       ${
@@ -173,13 +205,23 @@ const screens = {
     const r = ui.reveal;
     return `${topbar('Packs')}
       ${
-        r
+        r && !r.item
+          ? `<div class="reveal"><div class="flip collectible"><div class="art">💎</div><p><strong>You have every friend!</strong><br>+${r.shards} shards</p></div></div>`
+          : r
           ? `<div class="reveal"><div class="flip">${collectibleCard(r.item, {
+              cls: r.super ? 'ultra-glow' : '',
               extra: r.duplicate
                 ? `<p><strong>You already have this one!</strong><br>+${r.shards} 💎 shards</p>`
                 : '<p><strong>New friend!</strong></p>',
             })}</div></div>`
           : ''
+      }
+      ${
+        p.superPacks
+          ? `<div class="card super-card"><h3>🌟 You have ${p.superPacks} Super Pack${p.superPacks > 1 ? 's' : ''}!</h3>
+             <p>You earned ${p.superPacks > 1 ? 'these' : 'this'} by mastering words. A Super Pack always has an <strong class="rarity ultra">ultra</strong> friend from the theme you pick, and doesn't count toward today's packs.</p>
+             <button class="big super" data-action="open-super">Open ${theme.emoji} Super Pack</button></div>`
+          : `<div class="card">${superProgressHtml(p)}<p class="small muted">Ultra friends only come from Super Packs. Master ${SUPER_PACK_EVERY} words to earn one.</p></div>`
       }
       <div class="card">
         <h3>Pick a theme</h3>
@@ -209,7 +251,7 @@ const screens = {
         </table>
         <p>Rare or better guaranteed within <strong>${pity.rareIn}</strong> pack${pity.rareIn === 1 ? '' : 's'}.
            Epic guaranteed within <strong>${pity.epicIn}</strong>.</p>
-        <p class="muted">Shards let you pick any missing friend in your Collection.</p>
+        <p class="muted">Shards let you pick any missing friend in your Collection, except ultras. Ultras only come from Super Packs (100% ultra), earned by mastering words.</p>
       </div>`;
   },
 
@@ -239,6 +281,8 @@ const screens = {
                 const cost = CRAFT_COST[item.rarity];
                 const extra = owned
                   ? `<button class="${onTeam ? '' : 'secondary'}" data-action="toggle-team" data-id="${item.id}">${onTeam ? 'On team ✓' : 'Add to team'}</button>`
+                  : cost === undefined
+                  ? '<div class="small muted" style="margin-top:8px">🌟 From Super Packs</div>'
                   : `<button class="secondary" data-action="craft" data-id="${item.id}" ${p.shards >= cost ? '' : 'disabled'}>Make for ${cost} 💎</button>`;
                 return collectibleCard(item, { owned, extra, cls: onTeam ? 'on-team' : '' });
               })
@@ -281,13 +325,30 @@ const screens = {
       </div>`;
   },
 
+  words() {
+    const p = profile();
+    const week = new Set(currentWords(p).map((w) => w.id));
+    const sorted = [...p.words].sort((a, b) => (week.has(b.id) - week.has(a.id)) || (b.addedAt - a.addedAt));
+    const row = (w) => `<tr><td><strong>${esc(w.word)}</strong>${week.has(w.id) ? ' <span class="tag">this week</span>' : ''}</td>
+      <td>${starsHtml(p.srs[w.id])}</td><td class="small muted">${masteryRating(p.srs[w.id]).label}</td></tr>`;
+    return `${topbar('My words')}
+      <div class="card">${superProgressHtml(p)}</div>
+      <div class="card">
+        <p class="small muted">Each right answer adds a star, spread out over days. A miss starts the word over. Five stars means mastered!</p>
+        <table>${sorted.map(row).join('')}</table>
+      </div>`;
+  },
+
   parent() {
     const kids = data.order.map((id) => data.profiles[id]).filter(Boolean);
     const kid = data.profiles[ui.parentKid] || kids[0];
     if (kid) ui.parentKid = kid.id;
     const items = kid ? activeItems(kid) : [];
     const sum = masterySummary(items);
-    const listText = kid ? kid.words.map((w) => (w.sentence ? `${w.word} | ${w.sentence}` : w.word)).join('\n') : '';
+    const week = new Set(kid ? currentWords(kid).map((w) => w.id) : []);
+    const bank = kid ? [...kid.words].sort((a, b) => (week.has(b.id) - week.has(a.id)) || (b.addedAt - a.addedAt)) : [];
+    const voices = englishVoices();
+    const active = currentVoice();
     return `<div class="topbar">
         <button class="secondary" data-action="go" data-to="${data.activeId ? 'hub' : 'home'}">← Back</button>
         <h2 style="margin:0">Grown-ups</h2><span></span>
@@ -306,44 +367,71 @@ const screens = {
       ${
         kid
           ? `<div class="card">
-          <h3>${esc(kid.name)}'s words this week</h3>
+          <h3>Add this week's words for ${esc(kid.name)}</h3>
           <p class="small muted">One word per line. Add an example sentence after a bar if you like:<br><code>because | I stayed inside because it rained.</code><br>
-            Pasting a new list replaces this week's words. Progress on words that come back is kept.</p>
+            New words join ${esc(kid.name)}'s word bank and become this week's practice words. Older words keep their stars and come back now and then for review.
+            Adding an old word again puts it back in this week's set.</p>
           <form data-form="words">
-            <textarea name="words" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="friend | My friend lives next door.&#10;because&#10;people">${esc(listText)}</textarea>
-            <div class="row" style="margin-top:12px"><button type="submit">Save words</button>
+            <textarea name="words" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="friend | My friend lives next door.&#10;because&#10;people"></textarea>
+            <div class="row" style="margin-top:12px"><button type="submit">Add as this week's words</button>
             ${speechAvailable() ? '' : '<span class="muted">Speech is not available in this browser, so words will be shown instead of read aloud.</span>'}</div>
           </form>
         </div>
         <div class="card">
-          <h3>How ${esc(kid.name)} is doing</h3>
-          <p>${sum.mastered} mastered · ${sum.learning} learning · ${sum.new} not tried yet · ${kid.stats.correct}/${kid.stats.answered} correct overall</p>
+          <h3>${esc(kid.name)}'s word bank</h3>
+          <p>${bank.length} words · ${sum.mastered} mastered · ${sum.learning} learning · ${sum.new} not tried yet · ${kid.stats.correct}/${kid.stats.answered} correct overall</p>
           ${
-            items.length
-              ? `<table><tr><th>Word</th><th>Status</th><th>Right</th><th>Missed</th></tr>
-                ${items
-                  .map((i) => {
-                    const w = kid.words.find((x) => x.id === i.id);
-                    const status = i.seen === 0 ? 'New' : isMastered(i) ? 'Mastered ✓' : `Learning (${i.box}/${MAX_BOX})`;
-                    return `<tr><td><strong>${esc(w?.word)}</strong></td><td>${status}</td><td>${i.correct}</td><td>${i.misses}</td></tr>`;
+            bank.length
+              ? `<table><tr><th>Word</th><th>Mastery</th><th>Right</th><th>Missed</th><th>Added</th><th></th></tr>
+                ${bank
+                  .map((w) => {
+                    const i = kid.srs[w.id];
+                    return `<tr><td><strong>${esc(w.word)}</strong>${week.has(w.id) ? ' <span class="tag">this week</span>' : ''}</td>
+                      <td>${starsHtml(i)} <span class="small muted">${masteryRating(i).label}</span></td>
+                      <td>${i?.correct ?? 0}</td><td>${i?.misses ?? 0}</td>
+                      <td class="small muted">${new Date(w.addedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
+                      <td><button class="ghost" data-action="remove-word" data-id="${esc(w.id)}" aria-label="Remove ${esc(w.word)}">✕</button></td></tr>`;
                   })
                   .join('')}</table>`
               : ''
           }
-          <p class="small muted">A word is mastered after ${MAX_BOX} correct answers in a row, spread out over about a week. A miss starts it over.</p>
+          <p class="small muted">Mastery is a 0–${MAX_BOX} star rating. Each correct answer adds a star, with waits that grow from minutes to a week, so a word takes about a week to master. A miss starts it over.
+            Removing a word only takes it out of practice; its stars are kept if you add it again.</p>
         </div>`
           : ''
       }
+      <div class="card">
+        <h3>Voice</h3>
+        ${
+          !speechAvailable()
+            ? '<p>Speech is not available in this browser.</p>'
+            : `<p class="small muted">Words are read by a voice installed on this iPad. The game picks the best one it finds.
+                For a much more natural voice, download one on the iPad: <strong>Settings → Accessibility → Spoken Content → Voices → English</strong>,
+                then pick a voice marked <strong>Premium</strong> or <strong>Enhanced</strong> (for example Ava or Zoe) and tap download. Then reopen the game and choose it here.</p>
+               <div class="row">
+                 <select data-action-change="voice" aria-label="Voice">
+                   <option value="">Automatic (best installed${active ? `: ${esc(active.name)}` : ''})</option>
+                   ${voices
+                     .map((v) => `<option value="${esc(v.voiceURI)}" ${data.settings.voiceURI === v.voiceURI ? 'selected' : ''}>${esc(v.name)}${voiceQuality(v) ? ` (${voiceQuality(v)})` : ''} · ${esc(v.lang)}</option>`)
+                     .join('')}
+                 </select>
+                 <label class="row small">Speed <input type="range" min="0.6" max="1.1" step="0.05" value="${data.settings.rate}" data-action-change="rate"></label>
+                 <button class="secondary" data-action="test-voice">🔊 Test</button>
+               </div>`
+        }
+      </div>
       <div class="card small">
         <h3>How rewards work</h3>
         <p>Coins only come from correct answers, never from finishing a round. A word pays by how well it's known:
-          ${BOX_COINS.join(", ")} coins from new to mastered, plus ${COMEBACK_BONUS} for getting a recently missed word right.
+          ${BOX_COINS.join(', ')} coins from new to mastered, plus ${COMEBACK_BONUS} for getting a recently missed word right.
           Using a hint pays half. XP (${XP_PER.correct} per correct answer, ${XP_PER.monster} per monster) only unlocks looks in the Locker.</p>
         <p>Packs cost ${PACK_COST} coins, with at most ${DAILY_PACK_CAP} a day. Odds: ${Object.entries(ODDS)
           .map(([k, v]) => `${k} ${Math.round(v * 100)}%`)
           .join(', ')}. A rare or better is guaranteed every ${RARE_PITY} packs and an epic every ${EPIC_PITY}.
-          Missing friends always come before duplicates, duplicates become shards, and shards can make any missing friend, so every collection can be finished.
+          Missing friends always come before duplicates, duplicates become shards, and shards can make any missing friend except ultras.
           Nothing in the app costs money.</p>
+        <p><strong>The big rewards come from mastering words.</strong> The first time a word reaches ${MAX_BOX} stars it pays ${MASTERY_COINS} coins and ${XP_PER.mastered} XP,
+          and every ${SUPER_PACK_EVERY} mastered words earn a Super Pack: a guaranteed ultra friend (not limited by the daily cap). Ultra friends can't be bought with coins or shards, so finishing the collection takes mastering words.</p>
       </div>
       <div class="card">
         <h3>Backup</h3>
@@ -417,7 +505,7 @@ function parentButton() {
 // ---------- game flow ----------
 function startRound() {
   const p = profile();
-  if (!activeItems(p).length) return go('hub');
+  if (!p.words.length) return go('hub');
   const powers = teamPowers(p.team);
   ui.game = {
     powers,
@@ -425,6 +513,8 @@ function startRound() {
     phase: 'ask',
     recent: [],
     missed: new Set(),
+    mastered: [],
+    reviewUsed: 0,
     earned: { coins: 0, xp: 0 },
     startLevel: levelForXp(p.xp),
   };
@@ -435,11 +525,13 @@ function nextWord() {
   const g = ui.game;
   if (roundOver(g.battle)) return finishRound();
   const p = profile();
-  const items = activeItems(p);
-  const item = pickNext(items, Date.now(), Math.random, g.recent);
+  const pick = pickPracticeWord(p, Date.now(), Math.random, g.recent, g.reviewUsed);
+  if (!pick) return finishRound();
+  const { item, review } = pick;
+  if (review) g.reviewUsed++;
   g.word = p.words.find((w) => w.id === item.id);
-  g.recent = [item.id, ...g.recent].slice(0, Math.min(3, items.length - 1));
-  Object.assign(g, { phase: 'ask', usedHint: false, feedback: '', feedbackClass: '', zap: '', anim: '' });
+  g.recent = [item.id, ...g.recent].slice(0, Math.min(3, Math.max(0, currentWords(p).length - 1)));
+  Object.assign(g, { phase: 'ask', usedHint: false, feedback: review ? '⭐ Review word' : '', feedbackClass: '', zap: '', anim: '' });
   g.shownMonster = g.battle.monster;
   g.shownHp = g.battle.hp;
   ui.screen = 'play';
@@ -507,10 +599,15 @@ function submitAnswer(value) {
     g.zap = `💥${hit.damage > 1 ? ` ×${hit.damage}` : ''}`;
     g.anim = defeated ? 'down' : 'hit';
     g.feedback = defeated ? `You beat ${defeated.monster.name}! ${defeated.monster.emoji}` : ['Nice!', 'Yes!', 'Great spelling!', 'Boom!'][Math.floor(Math.random() * 4)];
+    if (rec.mastered) {
+      g.mastered.push(g.word.id);
+      g.earned.coins += MASTERY_COINS;
+      g.feedback = `🌟 You mastered “${g.word.word}”! +${MASTERY_COINS} 🪙`;
+    }
     g.feedbackClass = 'good';
     render();
     if (rec.coins) floatText(`+${rec.coins} 🪙`);
-    advanceLater(defeated ? 1300 : 900);
+    advanceLater(rec.mastered ? 2200 : defeated ? 1300 : 900);
   } else {
     g.missed.add(g.word.id);
     g.phase = 'copy';
@@ -541,6 +638,24 @@ const actions = {
     g.usedHint = true;
     render();
   },
+  'open-super': () => {
+    const themeId = ui.packTheme || THEMES[0].id;
+    const { profile: p1, result } = openSuperPack(profile(), themeId);
+    const { profile: p2, newly } = claimSetRewards(p1);
+    update(p2);
+    ui.reveal = result;
+    render();
+    window.scrollTo(0, 0);
+    if (newly.length) floatText(`🏅 ${newly[0].reward}! +${XP_PER.setComplete} XP`);
+  },
+  'remove-word': (d) => {
+    const kid = data.profiles[ui.parentKid];
+    const w = kid?.words.find((x) => x.id === d.id);
+    if (!w || !confirm(`Remove “${w.word}” from ${kid.name}'s words? Its stars are kept if you add it again.`)) return;
+    update(removeWord(kid, d.id));
+    render();
+  },
+  'test-voice': () => say('because', 'I stayed inside because it rained.'),
   'pack-theme': (d) => {
     ui.packTheme = d.id;
     ui.reveal = null;
@@ -624,21 +739,35 @@ app.addEventListener('submit', (e) => {
   } else if (kind === 'words') {
     const kid = data.profiles[ui.parentKid];
     const entries = parseWordList(form.words.value);
-    update(setWords(kid, entries, Date.now()));
-    ui.flash = `Saved ${entries.length} words for ${kid.name}.`;
+    if (!entries.length) return;
+    const r = addWords(kid, entries, Date.now());
+    update(r.profile);
+    ui.flash = `${kid.name}'s words this week: ${entries.length} (${r.added} new${r.returning ? `, ${r.returning} from before` : ''}).`;
     render();
     window.scrollTo(0, 0);
   }
 });
 
 app.addEventListener('change', async (e) => {
-  if (e.target.dataset.actionChange !== 'import') return;
+  const kind = e.target.dataset.actionChange;
+  if (kind === 'voice' || kind === 'rate') {
+    if (kind === 'voice') data.settings.voiceURI = e.target.value || null;
+    else data.settings.rate = Number(e.target.value);
+    save(data);
+    setSpeechPrefs(data.settings);
+    say('because');
+    return;
+  }
+  if (kind !== 'import') return;
   const file = e.target.files[0];
   if (!file) return;
   try {
     const restored = parseBackup(await file.text());
     if (!confirm('Replace everything on this iPad with the backup?')) return;
     data = restored;
+    for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
+    data.settings = { voiceURI: null, rate: 0.85, ...(data.settings || {}) };
+    setSpeechPrefs(data.settings);
     save(data);
     ui.flash = 'Backup restored.';
   } catch (err) {
@@ -666,7 +795,7 @@ const cancelHold = () => {
 
 // ---------- render ----------
 function render(opts = {}) {
-  if (['hub', 'play', 'summary', 'packs', 'book', 'locker'].includes(ui.screen) && !profile()) ui.screen = 'home';
+  if (['hub', 'play', 'summary', 'packs', 'book', 'locker', 'words'].includes(ui.screen) && !profile()) ui.screen = 'home';
   if (ui.screen === 'play' && app.dataset.screen === 'play') {
     patchPlay(opts);
   } else {
@@ -680,3 +809,5 @@ applyLook(profile());
 ui.screen = profile() ? 'hub' : 'home';
 render();
 requestPersistence();
+// Voices load late on some browsers; refresh the grown-ups screen when they arrive.
+onVoicesChanged(() => ui.screen === 'parent' && render());

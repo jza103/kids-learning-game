@@ -1,6 +1,6 @@
 # Kids Learning Game (working title)
 
-**Status:** spelling MVP built (PR open), not yet tried on the iPad
+**Status:** spelling game live on GitHub Pages; word bank, mastery rewards and voice picker added
 **Created:** 2026-11-17  **Last updated:** 2026-11-19
 
 _Moved from the `jza103/ideas` incubator repo on 2026-11-19._
@@ -18,11 +18,13 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 
 ## How the spelling game works (MVP)
 - **Players:** one profile per kid on the shared iPad, each with their own word list and progress.
-- **Words:** parent pastes the week's list (`word | example sentence`, sentence optional). A new list keeps progress on returning words.
+- **Word bank:** each week the parent adds about 10 words (`word | example sentence`). They join a growing bank and become "this week's" words. Older words keep their 0–5 star mastery rating, and due ones come back for review: about 20% of picks, at most 3 per round, more when this week's words are all caught up. Adding an old word again puts it back in this week's set.
 - **Practice:** Leitner boxes 0–5 (`src/srs.js`). Words are read aloud; missed and low-box words are picked more often. A miss sends a word back to box 0 and the kid copies it once to "lock it in". Mastered = box 5.
 - **Game:** a 10-word monster battle. Correct answers hit, 3 in a row adds damage, a miss lets the monster heal 1. No timers, no losing.
 - **Coins** (`src/economy.js`): only from correct answers, by box before answering (15/12/10/8/5/2), +5 for getting a recently missed word right, half for hinted answers.
+- **Mastery = big rewards:** the first time a word reaches 5 stars, it pays 30 coins and 50 XP, and every 5 mastered words earn a **Super Pack** with a guaranteed **ultra** friend (2 per theme; not craftable, not in normal packs, not limited by the daily cap).
 - **Packs:** 60 coins, 3 per day, kid picks a theme (Ocean, Space, Forest; 10 friends each). Odds shown (65/28/7%). Rare+ guaranteed every 4 packs, epic every 12. Missing friends come before duplicates; duplicates give shards; shards craft any missing friend, so every set can be finished.
+- **Voice:** best installed English voice (Premium > Enhanced > others), with a picker and speed slider for grown-ups. AI voice options: `docs/voice-options.md`.
 - **Collectibles have a purpose:** up to 3 on your team give powers (hints, damage, shields, XP boost). Finishing a theme gives a title and XP.
 - **XP / Locker:** cosmetic only (hero, hat, color, title).
 
@@ -44,19 +46,21 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - **Randomized rewards: decided (2026-11-19)** after Jason tested Blooket with the kids: collectibles with rarity via packs, kept mild. Odds shown, pity guarantees, duplicates → shards, daily cap, kid picks a theme, collectibles give in-game powers and fill a collection book, coins only from correct answers (missed words pay more, mastered less), parent writes the content. Background in `appeal-analysis.md`.
 
 ## Where we left off
-- Last done (2026-11-19): built the spelling MVP as an offline PWA following the Blooket-derived design rules (collectibles with rarity and a purpose, coins from correct answers, mild packs). Logic has unit tests; UI was smoke-tested in Chromium at iPad size.
+- Last done (2026-11-19): went live on GitHub Pages; then added the growing word bank with mastery stars, mastery-driven Super Packs with ultra friends, and better voice selection, all from Jason's first feedback.
 - Next:
-  1. Turn on GitHub Pages (workflow is ready) and try it on the iPad with the kids: check speech voice, keyboard, and whether the economy numbers feel right.
-  2. Tune numbers in `src/economy.js` / `src/progress.js` from real play.
+  1. Jason: download a Premium iPad voice, then decide whether to add AI voices (`docs/voice-options.md`).
+  2. Play with the kids and tune the numbers in `src/economy.js`, `src/profile.js` (review mix) and `src/progress.js`.
   3. Math facts mode (same item model and scheduler).
 - Open questions:
   - iOS PWA storage eviction: backup/restore exists on the grown-ups screen; is that enough?
-  - Curriculum file format once downloaded (PDF? structured data?) and how to map it to item banks.
+  - Curriculum file format once downloaded, and how to map it to item banks.
 
 ## Key files
 - `index.html`, `styles.css`, `src/app.js` — the app UI
 - `src/srs.js`, `src/economy.js`, `src/progress.js`, `src/battle.js`, `src/profile.js` — game and learning logic (pure, tested in `test/`)
 - `src/content.js` — collectibles, monsters, cosmetics
+- `src/voices.js`, `src/speech.js` — voice ranking and speech
+- `docs/voice-options.md` — AI voice options for a decision
 - `sw.js`, `manifest.webmanifest`, `icons/` — offline and install support
 - `recon.md` — competitor notes, dark patterns to avoid, basic design ideas
 - `appeal-analysis.md` — why Blooket/Prodigy hook kids, loot-box research, proposed rules for ethical randomized rewards

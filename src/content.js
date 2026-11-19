@@ -13,9 +13,10 @@ export const POWER_INFO = {
   xp: { label: 'XP boost', describe: (n) => `+${n * 10}% XP` },
 };
 
-export const RARITIES = ['common', 'rare', 'epic'];
+// 'ultra' only comes from Super Packs, which are earned by mastering words.
+export const RARITIES = ['common', 'rare', 'epic', 'ultra'];
 // Strength of a collectible's power by rarity.
-export const RARITY_STRENGTH = { common: 1, rare: 2, epic: 3 };
+export const RARITY_STRENGTH = { common: 1, rare: 2, epic: 3, ultra: 4 };
 
 const c = (id, name, emoji, rarity, power) => ({ id, name, emoji, rarity, power });
 
@@ -36,6 +37,8 @@ export const THEMES = [
       c('ocean-dolphin', 'Dot', '🐬', 'rare', 'xp'),
       c('ocean-shark', 'Finn', '🦈', 'rare', 'power'),
       c('ocean-whale', 'Grand Gulp', '🐳', 'epic', 'shield'),
+      c('ocean-mermaid', 'Marina', '🧜', 'ultra', 'power'),
+      c('ocean-kraken', 'Kraken Jr.', '🦑', 'ultra', 'hint'),
     ],
   },
   {
@@ -54,6 +57,8 @@ export const THEMES = [
       c('space-ufo', 'Wobble', '🛸', 'rare', 'shield'),
       c('space-robot', 'Bolt', '🤖', 'rare', 'power'),
       c('space-sun', 'Big Sunny', '🌞', 'epic', 'xp'),
+      c('space-galaxy', 'Nova', '🌌', 'ultra', 'shield'),
+      c('space-wish', 'Wish', '🌠', 'ultra', 'power'),
     ],
   },
   {
@@ -72,6 +77,8 @@ export const THEMES = [
       c('forest-fox', 'Rusty', '🦊', 'rare', 'power'),
       c('forest-deer', 'Antlers', '🦌', 'rare', 'xp'),
       c('forest-unicorn', 'Glimmer', '🦄', 'epic', 'hint'),
+      c('forest-fairy', 'Pip', '🧚', 'ultra', 'xp'),
+      c('forest-dragon', 'Old Mossback', '🐉', 'ultra', 'power'),
     ],
   },
 ];

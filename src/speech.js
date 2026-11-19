@@ -1,34 +1,56 @@
 // Read words aloud with the Web Speech API (works offline on iPad).
+// The voice is whichever installed voice sounds best, unless a grown-up picks one.
+import { bestVoice, rankVoices } from './voices.js';
+
+const prefs = { voiceURI: null, rate: 0.85 };
 let voice = null;
 
-function pickVoice() {
-  if (!('speechSynthesis' in window)) return null;
-  const voices = speechSynthesis.getVoices();
-  return (
-    voices.find((v) => v.lang === 'en-US' && v.localService) ||
-    voices.find((v) => v.lang && v.lang.startsWith('en')) ||
-    null
-  );
+export function speechAvailable() {
+  return typeof window !== 'undefined' && 'speechSynthesis' in window;
 }
 
-export function speechAvailable() {
-  return 'speechSynthesis' in window;
+function refresh() {
+  if (speechAvailable()) voice = bestVoice(speechSynthesis.getVoices(), prefs.voiceURI);
+}
+
+export function setSpeechPrefs({ voiceURI = null, rate = 0.85 } = {}) {
+  prefs.voiceURI = voiceURI;
+  prefs.rate = rate;
+  refresh();
+}
+
+/** English voices, best first. */
+export function englishVoices() {
+  return speechAvailable() ? rankVoices(speechSynthesis.getVoices()) : [];
+}
+
+export function currentVoice() {
+  return voice;
+}
+
+const listeners = [];
+export function onVoicesChanged(fn) {
+  listeners.push(fn);
 }
 
 if (speechAvailable()) {
-  voice = pickVoice();
-  speechSynthesis.addEventListener?.('voiceschanged', () => (voice = pickVoice()));
+  refresh();
+  speechSynthesis.addEventListener?.('voiceschanged', () => {
+    refresh();
+    listeners.forEach((fn) => fn());
+  });
 }
 
 /** Speak a list of phrases in order, e.g. [word, sentence, word]. */
 export function say(...phrases) {
   if (!speechAvailable()) return;
+  if (!voice) refresh();
   speechSynthesis.cancel();
   for (const text of phrases.filter(Boolean)) {
     const u = new SpeechSynthesisUtterance(text);
     if (voice) u.voice = voice;
     u.lang = voice?.lang || 'en-US';
-    u.rate = 0.85;
+    u.rate = prefs.rate;
     speechSynthesis.speak(u);
   }
 }

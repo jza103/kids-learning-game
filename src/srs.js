@@ -16,7 +16,7 @@ export const MISS_BOOST_PER_MISS = 0.5;
 export const MISS_BOOST_CAP = 4;
 
 export function newItem(id, now) {
-  return { id, box: 0, dueAt: now, seen: 0, correct: 0, misses: 0, lastResult: null };
+  return { id, box: 0, dueAt: now, seen: 0, correct: 0, misses: 0, lastResult: null, masteredAt: null };
 }
 
 /**
@@ -36,6 +36,9 @@ export function review(item, result, now) {
     next.misses = item.misses + 1;
   }
   next.dueAt = result === 'correct' ? now + INTERVALS[next.box] : now + INTERVALS[0];
+  // First time reaching the top box. Kept even if the word slips later, so
+  // mastery rewards are paid once per word.
+  next.masteredAt = item.masteredAt ?? (next.box >= MAX_BOX ? now : null);
   return next;
 }
 
@@ -64,6 +67,14 @@ export function pickNext(items, now, rng = Math.random, recent = []) {
   let pool = items.filter((i) => !recent.includes(i.id));
   if (!pool.length) pool = items;
   return weightedPick(pool.map((i) => [i, weightFor(i, now)]), rng);
+}
+
+/** 0-5 star mastery rating (the current box) and a label for it. */
+export function masteryRating(item) {
+  const stars = item ? item.box : 0;
+  let label = 'New';
+  if (item && item.seen > 0) label = stars >= MAX_BOX ? 'Mastered' : stars >= 3 ? 'Strong' : 'Learning';
+  return { stars, label };
 }
 
 /** Summary used on the parent screen. */

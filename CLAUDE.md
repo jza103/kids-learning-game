@@ -16,4 +16,4 @@ Read `README.md` first (status, decisions, where we left off). Open `recon.md` a
 - Be token-efficient: read only the files a task needs; don't read lockfiles, build output or `node_modules`.
 - Keep build tooling minimal.
 - At the end of a working session, update `README.md` (Status, Summary, Where we left off, date).
-- Commit small and often. Ask Jason before merging, pushing to `main` or deleting branches.
+- Commit small and often. Merging your own PRs is OK without asking (Jason, 2026-11-19); still ask before deleting branches or pushing straight to `main`.
