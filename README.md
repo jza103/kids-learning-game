@@ -24,7 +24,7 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - **Coins** (`src/economy.js`): only from correct answers, by box before answering (15/12/10/8/5/2), +5 for getting a recently missed word right, half for hinted answers.
 - **Mastery = big rewards:** the first time a word reaches 5 stars, it pays 30 coins and 50 XP, and every 5 mastered words earn a **Super Pack** with a guaranteed **ultra** friend (2 per theme; not craftable, not in normal packs, not limited by the daily cap).
 - **Packs:** 60 coins, 3 per day, kid picks a theme (Ocean, Space, Forest; 10 friends each). Odds shown (65/28/7%). Rare+ guaranteed every 4 packs, epic every 12. Missing friends come before duplicates; duplicates give shards; shards craft any missing friend, so every set can be finished.
-- **Voice:** optional natural AI voice from ElevenLabs (Jason's choice, 2026-11-19). The parent pastes an API key on the grown-ups screen; the key stays on the device and is left out of backups. Audio for each word and sentence is fetched once, saved in Cache Storage (`spelling-audio`, kept across app updates), and played offline. Anything without saved audio falls back to the best built-in voice. Note: iPad Safari doesn't expose downloaded Premium voices to web pages (WebKit bug 237584). Background: `docs/voice-options.md`.
+- **Voice:** optional natural AI voice from ElevenLabs (Jason's choice, 2026-11-19). The parent pastes an API key on the grown-ups screen; the key stays on the device and is left out of backups. Audio for each word and sentence is fetched once, saved in Cache Storage (`spelling-audio`, kept across app updates), and played offline. Each request carries spelling-test context (`previous_text`), the word-sentence-word playback is one clip so the word sounds the same each time, and the voice is tuned steady and a little slow (`CLIP_STYLE` in `src/aivoice.js`; bump it to re-make clips). Audio no word needs any more is cleaned up. Anything without saved audio falls back to the best built-in voice. Note: iPad Safari doesn't expose downloaded Premium voices to web pages (WebKit bug 237584). Background: `docs/voice-options.md`.
 - **Collectibles have a purpose:** up to 3 on your team give powers (hints, damage, shields, XP boost). Finishing a theme gives a title and XP.
 - **XP / Locker:** cosmetic only (hero, hat, color, title).
 
@@ -46,9 +46,9 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - **Randomized rewards: decided (2026-11-19)** after Jason tested Blooket with the kids: collectibles with rarity via packs, kept mild. Odds shown, pity guarantees, duplicates → shards, daily cap, kid picks a theme, collectibles give in-game powers and fill a collection book, coins only from correct answers (missed words pay more, mastered less), parent writes the content. Background in `appeal-analysis.md`.
 
 ## Where we left off
-- Last done (2026-11-19): went live on GitHub Pages; then added the growing word bank with mastery stars, mastery-driven Super Packs with ultra friends, and better voice selection, all from Jason's first feedback.
+- Last done (2026-11-19): went live on GitHub Pages; added the growing word bank with mastery stars, Super Packs and ElevenLabs voice. Then, from Jason's listening: spelling-test context for AI clips, a live check of typed words with tips and a 🔊 preview per word, and ✕ now deletes a word completely (stars and audio).
 - Next:
-  1. Jason: create an ElevenLabs key and paste it in grown-ups → Voice; check the kids like the voice.
+  1. Jason: listen to the re-made clips; if a word still sounds odd, tune `WORD_CONTEXT`/`VOICE_SETTINGS` in `src/aivoice.js`.
   2. Play with the kids and tune the numbers in `src/economy.js`, `src/profile.js` (review mix) and `src/progress.js`.
   3. Math facts mode (same item model and scheduler).
 - Open questions:

@@ -13,15 +13,15 @@ import {
 import { newBattle, applyAnswer, roundOver, hintText, ROUND_LENGTH } from './battle.js';
 import {
   newProfile, parseWordList, addWords, removeWord, migrateProfile, currentWords, activeItems, recordAnswer, checkSpelling,
-  pickPracticeWord,
+  pickPracticeWord, entryWarnings,
 } from './profile.js';
 import { load, save, requestPersistence, exportBackup, parseBackup } from './storage.js';
-import { say, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged, unlockAudio, preloadSpeech, sayBuiltIn } from './speech.js';
-import { getKey, setKey, listVoicesOrDefaults, prepareClips, countReady, clipTexts, charCount, clearClips, generateClip } from './aivoice.js';
+import { sayWord, saySentence, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged, unlockAudio, preloadSpeech, sayBuiltIn } from './speech.js';
+import { getKey, setKey, listVoicesOrDefaults, prepareClips, countReady, clipSpecs, clipsForWord, sentenceClip, pruneClips, charCount, clearClips, generateClip } from './aivoice.js';
 import { voiceQuality } from './voices.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-19.6';
+const APP_VERSION = '2026-11-19.7';
 const app = document.getElementById('app');
 let data = load();
 for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
@@ -35,8 +35,8 @@ function applySpeech() {
   setSpeechPrefs({ ...data.settings, aiVoiceId: ai.enabled && ai.voiceId && getKey() ? ai.voiceId : null });
 }
 
-function allClipTexts() {
-  return clipTexts(Object.values(data.profiles));
+function allClipSpecs() {
+  return clipSpecs(Object.values(data.profiles));
 }
 const ui = { screen: 'home', game: null, reveal: null, packTheme: null, parentKid: null, flash: '' };
 
@@ -403,11 +403,13 @@ const screens = {
         kid
           ? `<div class="card">
           <h3>Add this week's words for ${esc(kid.name)}</h3>
-          <p class="small muted">One word per line. Add an example sentence after a bar if you like:<br><code>because | I stayed inside because it rained.</code><br>
+          <p class="small muted">One word per line. To add a sentence, put a bar after the word, then the sentence:<br><code>because | I stayed inside because it rained.</code><br>
+            Write just the sentence and use the word exactly as it's spelled. The game says the word before and after the sentence for you. Tap 🔊 below to hear exactly what your kids will hear.<br>
             New words join ${esc(kid.name)}'s word bank and become this week's practice words. Older words keep their stars and come back now and then for review.
             Adding an old word again puts it back in this week's set.</p>
           <form data-form="words">
-            <textarea name="words" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="friend | My friend lives next door.&#10;because&#10;people"></textarea>
+            <textarea name="words" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="friend | My friend lives next door.&#10;because&#10;people" data-live="words"></textarea>
+            <div id="words-check"></div>
             <div class="row" style="margin-top:12px"><button type="submit">Add as this week's words</button>
             ${speechAvailable() ? '' : '<span class="muted">Speech is not available in this browser, so words will be shown instead of read aloud.</span>'}</div>
           </form>
@@ -425,13 +427,14 @@ const screens = {
                       <td>${starsHtml(i)} <span class="small muted">${masteryRating(i).label}</span></td>
                       <td>${i?.correct ?? 0}</td><td>${i?.misses ?? 0}</td>
                       <td class="small muted">${new Date(w.addedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
-                      <td><button class="ghost" data-action="remove-word" data-id="${esc(w.id)}" aria-label="Remove ${esc(w.word)}">✕</button></td></tr>`;
+                      <td class="nowrap"><button class="ghost" data-action="hear-bank" data-id="${esc(w.id)}" aria-label="Hear ${esc(w.word)}">🔊</button><button class="ghost" data-action="remove-word" data-id="${esc(w.id)}" aria-label="Remove ${esc(w.word)}">✕</button></td></tr>`;
                   })
                   .join('')}</table>`
               : ''
           }
           <p class="small muted">Mastery is a 0–${MAX_BOX} star rating. Each correct answer adds a star, with waits that grow from minutes to a week, so a word takes about a week to master. A miss starts it over.
-            Removing a word only takes it out of practice; its stars are kept if you add it again.</p>
+            🔊 plays a word the way the kids hear it. ✕ deletes a word completely (for typos), stars and all. Coins and cards already earned stay.</p>
+          <p class="small muted preview-status"></p>
         </div>`
           : ''
       }
@@ -591,14 +594,52 @@ function setAiStatus(text) {
 async function refreshAiStatus() {
   const ai = data.settings.ai;
   if (!ai.voiceId) return;
-  const texts = allClipTexts();
-  const ready = await countReady(ai.voiceId, texts);
+  const specs = allClipSpecs();
+  const ready = await countReady(ai.voiceId, specs);
   setAiStatus(
-    `${ai.enabled ? 'On' : 'Off'} · ${ready} of ${texts.length} words and sentences have audio saved on this iPad. ` +
-      `All of them together are ${charCount(texts).toLocaleString()} characters of ElevenLabs credit, and each is only fetched once.` +
+    `${ai.enabled ? 'On' : 'Off'} · ${ready} of ${specs.length} words and sentences have audio saved on this iPad. ` +
+      `All of them together are ${charCount(specs).toLocaleString()} characters of ElevenLabs credit, and each is only fetched once.` +
       limitedNote(),
   );
 }
+
+/** Play a word the way the kids will hear it, fetching its AI audio first if needed. */
+async function previewWord(w) {
+  unlockAudio();
+  const ai = data.settings.ai;
+  const key = getKey();
+  const status = (t) => app.querySelectorAll('.preview-status').forEach((el) => (el.textContent = t));
+  if (ai.enabled && ai.voiceId && key) {
+    const specs = clipsForWord(w);
+    status('Getting audio…');
+    const res = await prepareClips(key, ai.voiceId, specs);
+    status(res.error || '');
+    await preloadSpeech(specs);
+  }
+  return w.sentence ? saySentence(w.word, w.sentence) : sayWord(w.word);
+}
+
+/** Live check of the typed word list: what was understood, tips, and a 🔊 per word. */
+function wordsCheckHtml(text) {
+  const entries = parseWordList(text);
+  if (!entries.length) return '';
+  const rows = entries.map((e, i) => {
+    const warns = entryWarnings(e);
+    return `<tr><td><strong>${esc(e.word)}</strong></td>
+      <td>${e.sentence ? esc(e.sentence) : '<span class="muted">no sentence</span>'}${warns.map((t) => `<div class="warn">⚠️ ${esc(t)}</div>`).join('')}</td>
+      <td><button type="button" class="ghost" data-action="preview-entry" data-i="${i}" aria-label="Hear ${esc(e.word)}">🔊</button></td></tr>`;
+  });
+  const flagged = entries.filter((e) => entryWarnings(e).length).length;
+  return `<p class="small">${entries.length} word${entries.length === 1 ? '' : 's'}${flagged ? ` · ${flagged} to check` : ' · looks good'}</p>
+    <table class="check"><tr><th>Word</th><th>Sentence</th><th></th></tr>${rows.join('')}</table>
+    <p class="small muted preview-status"></p>`;
+}
+
+app.addEventListener('input', (e) => {
+  if (e.target.dataset?.live !== 'words') return;
+  const el = document.getElementById('words-check');
+  if (el) el.innerHTML = wordsCheckHtml(e.target.value);
+});
 
 let preparing = false;
 /** Fetch audio for every word and sentence that doesn't have it yet. */
@@ -608,7 +649,8 @@ async function prepareAllClips() {
   if (preparing || !ai.enabled || !ai.voiceId || !key) return;
   preparing = true;
   try {
-    const res = await prepareClips(key, ai.voiceId, allClipTexts(), (done, total) => setAiStatus(`Getting audio… ${done} of ${total}`));
+    await pruneClips(allClipSpecs()).catch(() => {});
+    const res = await prepareClips(key, ai.voiceId, allClipSpecs(), (done, total) => setAiStatus(`Getting audio… ${done} of ${total}`));
     if (res.error) setAiStatus(res.error);
     else refreshAiStatus();
   } finally {
@@ -624,7 +666,7 @@ function parentButton() {
 async function startRound() {
   const p = profile();
   if (!p.words.length) return go('hub');
-  await preloadSpeech(clipTexts([p]));
+  await preloadSpeech(clipSpecs([p]));
   const powers = teamPowers(p.team);
   ui.game = {
     powers,
@@ -655,7 +697,7 @@ function nextWord() {
   g.shownHp = g.battle.hp;
   ui.screen = 'play';
   render({ clearInput: true });
-  say(g.word.word);
+  sayWord(g.word.word);
 }
 
 // Move on after a short pause, unless the kid left the round meanwhile.
@@ -686,7 +728,7 @@ function submitAnswer(value) {
       g.feedback = 'Not quite. Copy it letter by letter.';
       g.feedbackClass = 'bad';
       render({ clearInput: true });
-      say(g.word.word);
+      sayWord(g.word.word);
     }
     return;
   }
@@ -734,7 +776,7 @@ function submitAnswer(value) {
     g.feedback = events.some((e) => e.type === 'shielded') ? '🛡️ Your shield stopped the monster from healing.' : 'Close! Let\'s learn this one.';
     g.feedbackClass = 'bad';
     render({ clearInput: true });
-    say(g.word.word);
+    sayWord(g.word.word);
   }
 }
 
@@ -754,11 +796,11 @@ const actions = {
   'end-round': () => (ui.game.battle.asked ? finishRound() : go('hub')),
   hear: () => {
     unlockAudio();
-    say(ui.game.word.word);
+    sayWord(ui.game.word.word);
   },
   'hear-sentence': () => {
     unlockAudio();
-    say(ui.game.word.word, ui.game.word.sentence, ui.game.word.word);
+    saySentence(ui.game.word.word, ui.game.word.sentence);
   },
   hint: () => {
     const g = ui.game;
@@ -779,9 +821,19 @@ const actions = {
   'remove-word': (d) => {
     const kid = data.profiles[ui.parentKid];
     const w = kid?.words.find((x) => x.id === d.id);
-    if (!w || !confirm(`Remove “${w.word}” from ${kid.name}'s words? Its stars are kept if you add it again.`)) return;
+    if (!w || !confirm(`Delete “${w.word}” completely? Its stars and history are erased. Coins and cards already earned stay.`)) return;
     update(removeWord(kid, d.id));
     render();
+    pruneClips(allClipSpecs()).then(() => refreshAiStatus()).catch(() => {});
+  },
+  'hear-bank': (d) => {
+    const w = data.profiles[ui.parentKid]?.words.find((x) => x.id === d.id);
+    if (w) previewWord(w);
+  },
+  'preview-entry': (d) => {
+    const ta = app.querySelector('[data-live="words"]');
+    const e = ta && parseWordList(ta.value)[Number(d.i)];
+    if (e) previewWord(e);
   },
   'test-voice': () => sayBuiltIn('because', 'I stayed inside because it rained.'),
   'ai-test': async () => {
@@ -790,7 +842,7 @@ const actions = {
     if (!ai.voiceId) return;
     setAiStatus('Getting a sample…');
     try {
-      const blob = await generateClip(getKey(), ai.voiceId, 'Because. I stayed inside because it rained.');
+      const blob = await generateClip(getKey(), ai.voiceId, sentenceClip('because', 'I stayed inside because it rained.'));
       const a = new Audio(URL.createObjectURL(blob));
       await a.play();
       refreshAiStatus();
@@ -930,7 +982,7 @@ app.addEventListener('change', async (e) => {
     else data.settings.rate = Number(e.target.value);
     save(data);
     applySpeech();
-    say('because');
+    sayBuiltIn('because');
     return;
   }
   if (kind === 'ai-voice') {
