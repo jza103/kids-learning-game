@@ -17,11 +17,11 @@ import {
 } from './profile.js';
 import { load, save, requestPersistence, exportBackup, parseBackup } from './storage.js';
 import { say, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged, unlockAudio, preloadSpeech, sayBuiltIn } from './speech.js';
-import { getKey, setKey, listVoices, prepareClips, countReady, clipTexts, charCount, clearClips, generateClip } from './aivoice.js';
+import { getKey, setKey, listVoicesOrDefaults, prepareClips, countReady, clipTexts, charCount, clearClips, generateClip } from './aivoice.js';
 import { voiceQuality } from './voices.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-19.5';
+const APP_VERSION = '2026-11-19.6';
 const app = document.getElementById('app');
 let data = load();
 for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
@@ -546,6 +546,7 @@ function aiVoiceHtml() {
 }
 
 let aiVoicesCache = null;
+let aiVoicesLimited = false;
 
 /** Fill the AI voice list and status on the grown-ups screen without re-rendering it. */
 async function refreshAiPanel() {
@@ -553,7 +554,11 @@ async function refreshAiPanel() {
   const select = document.getElementById('ai-voice');
   if (!key || !select) return;
   try {
-    aiVoicesCache = aiVoicesCache || (await listVoices(key));
+    if (!aiVoicesCache) {
+      const r = await listVoicesOrDefaults(key);
+      aiVoicesCache = r.voices;
+      aiVoicesLimited = r.limited;
+    }
     const ai = data.settings.ai;
     if (!ai.voiceId && aiVoicesCache.length) {
       ai.voiceId = aiVoicesCache[0].id;
@@ -574,6 +579,10 @@ async function refreshAiPanel() {
   prepareAllClips();
 }
 
+function limitedNote() {
+  return aiVoicesLimited ? " This key can't list your voices, so ElevenLabs' standard voices are shown. That's fine." : '';
+}
+
 function setAiStatus(text) {
   const el = document.getElementById('ai-status');
   if (el) el.textContent = text;
@@ -586,7 +595,8 @@ async function refreshAiStatus() {
   const ready = await countReady(ai.voiceId, texts);
   setAiStatus(
     `${ai.enabled ? 'On' : 'Off'} · ${ready} of ${texts.length} words and sentences have audio saved on this iPad. ` +
-      `All of them together are ${charCount(texts).toLocaleString()} characters of ElevenLabs credit, and each is only fetched once.`,
+      `All of them together are ${charCount(texts).toLocaleString()} characters of ElevenLabs credit, and each is only fetched once.` +
+      limitedNote(),
   );
 }
 
@@ -895,6 +905,7 @@ app.addEventListener('submit', (e) => {
     data.settings.ai.enabled = true;
     save(data);
     aiVoicesCache = null;
+    aiVoicesLimited = false;
     ui.flash = 'ElevenLabs key saved on this iPad. Pick a voice and tap Test.';
     render();
     applySpeech();

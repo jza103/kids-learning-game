@@ -18,7 +18,34 @@ test('clipTexts collects every word and sentence once, across players', () => {
 
 test('API errors become plain-language messages', () => {
   assert.match(explainError(401), /key/);
+  assert.match(explainError(401, 'missing_permissions: needs text_to_speech'), /permission/);
   assert.match(explainError(402), /used up/);
   assert.match(explainError(400, 'quota_exceeded'), /used up/);
   assert.match(explainError(0), /internet/);
+});
+
+test('a key without voices permission falls back to the standard voices', async () => {
+  const { listVoicesOrDefaults, DEFAULT_VOICES } = await import('../src/aivoice.js');
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ detail: { status: 'missing_permissions', message: 'The API key you used is missing the permission voices_read' } }), { status: 401 });
+  try {
+    const r = await listVoicesOrDefaults('k');
+    assert.equal(r.limited, true);
+    assert.deepEqual(r.voices, DEFAULT_VOICES);
+    assert.match(r.reason, /missing_permissions/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('TTS errors keep ElevenLabs reason in the message', async () => {
+  const { generateClip } = await import('../src/aivoice.js');
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ detail: { status: 'invalid_api_key', message: 'Invalid API key' } }), { status: 401 });
+  try {
+    await assert.rejects(generateClip('k', 'v', 'hi'), (err) => /rejected/.test(err.message) && /Invalid API key/.test(err.message) && err.status === 401);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

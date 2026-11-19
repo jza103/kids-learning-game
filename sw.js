@@ -1,7 +1,7 @@
 // Offline support: precache the app shell, then serve from cache and refresh
 // the cache in the background (stale-while-revalidate), so updates show up on
 // the next launch. Bump VERSION when adding or removing files.
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = `spelling-${VERSION}`;
 const SHELL = [
   './',

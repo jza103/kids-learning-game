@@ -34,13 +34,34 @@ export function charCount(texts) {
   return texts.reduce((n, t) => n + t.length, 0);
 }
 
-/** Turn an API error into a sentence a parent can act on. */
+// ElevenLabs' standard voices, used when the key isn't allowed to list voices
+// (a key with only Text to Speech access can still use these).
+export const DEFAULT_VOICES = [
+  { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah', accent: 'american', description: 'soft, warm' },
+  { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', accent: 'american', description: 'calm' },
+  { id: 'XrExE9yKIg1WjnnlVkGX', name: 'Matilda', accent: 'american', description: 'friendly' },
+  { id: 'pFZP5JQG7iQjIQuC4Bku', name: 'Lily', accent: 'british', description: 'warm' },
+  { id: 'Xb7hH8MSUJpSbSDYk0k2', name: 'Alice', accent: 'british', description: 'clear' },
+  { id: 'nPczCjzI2devNBz1zQrb', name: 'Brian', accent: 'american', description: 'deep' },
+  { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George', accent: 'british', description: 'warm' },
+  { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', accent: 'british', description: 'authoritative' },
+];
+
+/** True when the error is about the key's permissions rather than the key itself. */
+export function isPermissionError(status, detail = '') {
+  return status === 403 || /permission/i.test(detail);
+}
+
+/** Turn an API error into a sentence a parent can act on, keeping ElevenLabs' own reason. */
 export function explainError(status, detail = '') {
-  if (status === 401) return 'ElevenLabs rejected the API key. Check that it was copied correctly and has Text to Speech access.';
-  if (status === 402 || /quota|credits|limit/i.test(detail)) return "This month's free ElevenLabs characters are used up. Words without audio will use the built-in voice.";
+  const why = detail ? ` (ElevenLabs said: ${detail})` : '';
+  if (isPermissionError(status, detail)) return `The key is missing a permission it needs${why}. Edit the key on elevenlabs.io and turn on Text to Speech.`;
+  if (status === 401) return `ElevenLabs rejected the API key${why}. Check that the whole key was copied.`;
+  if (status === 402 || /quota|credits/i.test(detail)) return `This month's free ElevenLabs characters are used up${why}. Words without audio will use the built-in voice.`;
   if (status === 429) return 'ElevenLabs is busy. Try again in a minute.';
   if (status === 0) return "Couldn't reach ElevenLabs. Check the internet connection.";
-  return `ElevenLabs error ${status}${detail ? `: ${detail}` : ''}`;
+  if (status === 404) return `ElevenLabs couldn't find that voice${why}. Pick another voice.`;
+  return `ElevenLabs error ${status}${why}`;
 }
 
 // ---------- key ----------
@@ -71,14 +92,27 @@ async function api(path, key, init = {}) {
     let detail = '';
     try {
       const body = await res.json();
-      detail = body?.detail?.message || body?.detail?.status || (typeof body?.detail === 'string' ? body.detail : '');
+      const d = body?.detail;
+      detail = typeof d === 'string' ? d : [d?.status, d?.message].filter(Boolean).join(': ');
     } catch {}
-    throw Object.assign(new Error(explainError(res.status, detail)), { status: res.status });
+    throw Object.assign(new Error(explainError(res.status, detail)), { status: res.status, detail });
   }
   return res;
 }
 
-/** Voices available to this key, premade ones first. */
+/**
+ * Voices available to this key, premade ones first. If the key may not list
+ * voices (Text-to-Speech-only keys), returns the standard voices with limited: true.
+ */
+export async function listVoicesOrDefaults(key) {
+  try {
+    return { voices: await listVoices(key), limited: false };
+  } catch (err) {
+    if (err.status === 401 || err.status === 403) return { voices: DEFAULT_VOICES, limited: true, reason: err.detail || '' };
+    throw err;
+  }
+}
+
 export async function listVoices(key) {
   const res = await api('/voices', key);
   const { voices = [] } = await res.json();
