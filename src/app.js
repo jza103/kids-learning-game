@@ -16,16 +16,28 @@ import {
   pickPracticeWord,
 } from './profile.js';
 import { load, save, requestPersistence, exportBackup, parseBackup } from './storage.js';
-import { say, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged } from './speech.js';
+import { say, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged, unlockAudio, preloadSpeech, sayBuiltIn } from './speech.js';
+import { getKey, setKey, listVoices, prepareClips, countReady, clipTexts, charCount, clearClips, generateClip } from './aivoice.js';
 import { voiceQuality } from './voices.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-19.4';
+const APP_VERSION = '2026-11-19.5';
 const app = document.getElementById('app');
 let data = load();
 for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
 data.settings = { voiceURI: null, rate: 0.85, ...(data.settings || {}) };
-setSpeechPrefs(data.settings);
+data.settings.ai = { enabled: false, voiceId: null, voiceName: null, ...(data.settings.ai || {}) };
+applySpeech();
+
+/** Use the ElevenLabs voice only when it's switched on and a key is saved. */
+function applySpeech() {
+  const ai = data.settings.ai;
+  setSpeechPrefs({ ...data.settings, aiVoiceId: ai.enabled && ai.voiceId && getKey() ? ai.voiceId : null });
+}
+
+function allClipTexts() {
+  return clipTexts(Object.values(data.profiles));
+}
 const ui = { screen: 'home', game: null, reveal: null, packTheme: null, parentKid: null, flash: '' };
 
 // ---------- helpers ----------
@@ -385,6 +397,7 @@ const screens = {
                  <button class="secondary" data-action="test-voice">🔊 Test</button>
                </div>`
         }
+        ${aiVoiceHtml()}
       </div>
       ${
         kid
@@ -501,14 +514,107 @@ function patchPlay({ clearInput = false } = {}) {
   if (clearInput) input.value = '';
 }
 
+function aiVoiceHtml() {
+  const key = getKey();
+  const ai = data.settings.ai;
+  if (!key) {
+    return `<h3 style="margin-top:20px">Natural AI voice (ElevenLabs)</h3>
+      <p class="small muted">For a much more natural voice, the game can get recordings from ElevenLabs and save them on this iPad.
+        Only the words and example sentences are sent, never names or progress. The free plan covers about 10 words a week easily.</p>
+      <ol class="small">
+        <li>Make a free account at <strong>elevenlabs.io</strong>.</li>
+        <li>Open your profile → <strong>API Keys</strong> → create a key (it needs Text to Speech and Voices read access).</li>
+        <li>Paste it here. It stays on this iPad and isn't included in backups.</li>
+      </ol>
+      <form data-form="ai-key" class="row">
+        <input type="password" name="key" placeholder="ElevenLabs API key" autocomplete="off" autocapitalize="off" spellcheck="false" style="flex:1;min-width:200px">
+        <button type="submit">Save key</button>
+      </form>`;
+  }
+  return `<h3 style="margin-top:20px">Natural AI voice (ElevenLabs)</h3>
+    <label class="row"><input type="checkbox" data-action-change="ai-enabled" ${ai.enabled ? 'checked' : ''} style="width:24px;height:24px"> Use the AI voice</label>
+    <div class="row" style="margin-top:8px">
+      <select id="ai-voice" data-action-change="ai-voice" aria-label="AI voice">
+        <option value="${esc(ai.voiceId || '')}">${esc(ai.voiceName || 'Loading voices…')}</option>
+      </select>
+      <button class="secondary" data-action="ai-test">🔊 Test</button>
+      <button class="secondary" data-action="ai-prepare">Get audio now</button>
+    </div>
+    <p class="small" id="ai-status" aria-live="polite">Checking saved audio…</p>
+    <p class="small muted">Audio is fetched automatically when you add words and saved on this iPad, so the game works offline.
+      Words without saved audio use the built-in voice. <button class="ghost" data-action="ai-remove-key">Remove key</button></p>`;
+}
+
+let aiVoicesCache = null;
+
+/** Fill the AI voice list and status on the grown-ups screen without re-rendering it. */
+async function refreshAiPanel() {
+  const key = getKey();
+  const select = document.getElementById('ai-voice');
+  if (!key || !select) return;
+  try {
+    aiVoicesCache = aiVoicesCache || (await listVoices(key));
+    const ai = data.settings.ai;
+    if (!ai.voiceId && aiVoicesCache.length) {
+      ai.voiceId = aiVoicesCache[0].id;
+      ai.voiceName = aiVoicesCache[0].name;
+      save(data);
+      applySpeech();
+    }
+    const el = document.getElementById('ai-voice');
+    if (el)
+      el.innerHTML = aiVoicesCache
+        .map((v) => `<option value="${esc(v.id)}" ${v.id === ai.voiceId ? 'selected' : ''}>${esc(v.name)}${v.accent ? ` · ${esc(v.accent)}` : ''}${v.description ? ` · ${esc(v.description)}` : ''}</option>`)
+        .join('');
+  } catch (err) {
+    setAiStatus(err.message);
+    return;
+  }
+  await refreshAiStatus();
+  prepareAllClips();
+}
+
+function setAiStatus(text) {
+  const el = document.getElementById('ai-status');
+  if (el) el.textContent = text;
+}
+
+async function refreshAiStatus() {
+  const ai = data.settings.ai;
+  if (!ai.voiceId) return;
+  const texts = allClipTexts();
+  const ready = await countReady(ai.voiceId, texts);
+  setAiStatus(
+    `${ai.enabled ? 'On' : 'Off'} · ${ready} of ${texts.length} words and sentences have audio saved on this iPad. ` +
+      `All of them together are ${charCount(texts).toLocaleString()} characters of ElevenLabs credit, and each is only fetched once.`,
+  );
+}
+
+let preparing = false;
+/** Fetch audio for every word and sentence that doesn't have it yet. */
+async function prepareAllClips() {
+  const ai = data.settings.ai;
+  const key = getKey();
+  if (preparing || !ai.enabled || !ai.voiceId || !key) return;
+  preparing = true;
+  try {
+    const res = await prepareClips(key, ai.voiceId, allClipTexts(), (done, total) => setAiStatus(`Getting audio… ${done} of ${total}`));
+    if (res.error) setAiStatus(res.error);
+    else refreshAiStatus();
+  } finally {
+    preparing = false;
+  }
+}
+
 function parentButton() {
   return `<button class="ghost hold" data-hold="parent"><span class="fill"></span>👪 Grown-ups (press and hold)</button>`;
 }
 
 // ---------- game flow ----------
-function startRound() {
+async function startRound() {
   const p = profile();
   if (!p.words.length) return go('hub');
+  await preloadSpeech(clipTexts([p]));
   const powers = teamPowers(p.team);
   ui.game = {
     powers,
@@ -631,10 +737,19 @@ const actions = {
     applyLook(profile());
     go('hub');
   },
-  play: () => startRound(),
+  play: () => {
+    unlockAudio();
+    startRound();
+  },
   'end-round': () => (ui.game.battle.asked ? finishRound() : go('hub')),
-  hear: () => say(ui.game.word.word),
-  'hear-sentence': () => say(ui.game.word.word, ui.game.word.sentence, ui.game.word.word),
+  hear: () => {
+    unlockAudio();
+    say(ui.game.word.word);
+  },
+  'hear-sentence': () => {
+    unlockAudio();
+    say(ui.game.word.word, ui.game.word.sentence, ui.game.word.word);
+  },
   hint: () => {
     const g = ui.game;
     g.battle = { ...g.battle, hintsLeft: g.battle.hintsLeft - 1 };
@@ -658,7 +773,41 @@ const actions = {
     update(removeWord(kid, d.id));
     render();
   },
-  'test-voice': () => say('because', 'I stayed inside because it rained.'),
+  'test-voice': () => sayBuiltIn('because', 'I stayed inside because it rained.'),
+  'ai-test': async () => {
+    unlockAudio();
+    const ai = data.settings.ai;
+    if (!ai.voiceId) return;
+    setAiStatus('Getting a sample…');
+    try {
+      const blob = await generateClip(getKey(), ai.voiceId, 'Because. I stayed inside because it rained.');
+      const a = new Audio(URL.createObjectURL(blob));
+      await a.play();
+      refreshAiStatus();
+    } catch (err) {
+      setAiStatus(err.message);
+    }
+  },
+  'ai-prepare': () => {
+    if (!data.settings.ai.enabled) {
+      data.settings.ai.enabled = true;
+      save(data);
+      applySpeech();
+      const box = app.querySelector('[data-action-change="ai-enabled"]');
+      if (box) box.checked = true;
+    }
+    prepareAllClips();
+  },
+  'ai-remove-key': async () => {
+    if (!confirm('Remove the ElevenLabs key and the saved AI audio from this iPad?')) return;
+    setKey('');
+    aiVoicesCache = null;
+    data.settings.ai = { enabled: false, voiceId: null, voiceName: null };
+    save(data);
+    applySpeech();
+    await clearClips();
+    render();
+  },
   'pack-theme': (d) => {
     ui.packTheme = d.id;
     ui.reveal = null;
@@ -739,6 +888,17 @@ app.addEventListener('submit', (e) => {
     ui.flash = `Added ${p.name}. Now paste their words below.`;
     save(data);
     render();
+  } else if (kind === 'ai-key') {
+    const key = form.key.value.trim();
+    if (!key) return;
+    setKey(key);
+    data.settings.ai.enabled = true;
+    save(data);
+    aiVoicesCache = null;
+    ui.flash = 'ElevenLabs key saved on this iPad. Pick a voice and tap Test.';
+    render();
+    applySpeech();
+    prepareAllClips();
   } else if (kind === 'words') {
     const kid = data.profiles[ui.parentKid];
     const entries = parseWordList(form.words.value);
@@ -746,6 +906,7 @@ app.addEventListener('submit', (e) => {
     const r = addWords(kid, entries, Date.now());
     update(r.profile);
     ui.flash = `${kid.name}'s words this week: ${entries.length} (${r.added} new${r.returning ? `, ${r.returning} from before` : ''}).`;
+    setTimeout(prepareAllClips, 0);
     render();
     window.scrollTo(0, 0);
   }
@@ -757,8 +918,26 @@ app.addEventListener('change', async (e) => {
     if (kind === 'voice') data.settings.voiceURI = e.target.value || null;
     else data.settings.rate = Number(e.target.value);
     save(data);
-    setSpeechPrefs(data.settings);
+    applySpeech();
     say('because');
+    return;
+  }
+  if (kind === 'ai-voice') {
+    const opt = e.target.selectedOptions[0];
+    data.settings.ai.voiceId = e.target.value || null;
+    data.settings.ai.voiceName = opt ? opt.textContent : null;
+    save(data);
+    applySpeech();
+    refreshAiStatus();
+    prepareAllClips();
+    return;
+  }
+  if (kind === 'ai-enabled') {
+    data.settings.ai.enabled = e.target.checked;
+    save(data);
+    applySpeech();
+    refreshAiStatus();
+    if (e.target.checked) prepareAllClips();
     return;
   }
   if (kind !== 'import') return;
@@ -770,7 +949,8 @@ app.addEventListener('change', async (e) => {
     data = restored;
     for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
     data.settings = { voiceURI: null, rate: 0.85, ...(data.settings || {}) };
-    setSpeechPrefs(data.settings);
+    data.settings.ai = { enabled: false, voiceId: null, voiceName: null, ...(data.settings.ai || {}) };
+    applySpeech();
     save(data);
     ui.flash = 'Backup restored.';
   } catch (err) {
@@ -806,6 +986,7 @@ function render(opts = {}) {
     app.dataset.screen = ui.screen;
   }
   if (ui.screen === 'play') document.getElementById('answer')?.focus();
+  if (ui.screen === 'parent') refreshAiPanel();
 }
 
 applyLook(profile());
