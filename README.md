@@ -12,7 +12,8 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - No build step and no dependencies: plain HTML/CSS/ES modules.
 - Tests (spaced repetition, coins, packs, battle): `npm test` (Node 18+).
 - Try locally: `npm start`, then open http://localhost:8080.
-- On the iPad: host the folder on any HTTPS static host (e.g. GitHub Pages), open it in Safari, then Share → Add to Home Screen. After the first load it works offline.
+- Hosting: `.github/workflows/pages.yml` publishes to GitHub Pages on every push to `main` (needs Settings → Pages → Source: GitHub Actions; a private repo needs GitHub Pro for Pages). Site: https://jza103.github.io/kids-learning-game/
+- On the iPad: open the site in Safari, then Share → Add to Home Screen. After the first load it works offline.
 - Grown-ups screen: press and hold the 👪 button on the home or hub screen.
 
 ## How the spelling game works (MVP)
@@ -45,7 +46,7 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 ## Where we left off
 - Last done (2026-11-19): built the spelling MVP as an offline PWA following the Blooket-derived design rules (collectibles with rarity and a purpose, coins from correct answers, mild packs). Logic has unit tests; UI was smoke-tested in Chromium at iPad size.
 - Next:
-  1. Host it (GitHub Pages is simplest) and try it on the iPad with the kids: check speech voice, keyboard, and whether the economy numbers feel right.
+  1. Turn on GitHub Pages (workflow is ready) and try it on the iPad with the kids: check speech voice, keyboard, and whether the economy numbers feel right.
   2. Tune numbers in `src/economy.js` / `src/progress.js` from real play.
   3. Math facts mode (same item model and scheduler).
 - Open questions:
