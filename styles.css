@@ -77,7 +77,7 @@ button.big { font-size: 1.5rem; padding: 20px 28px; min-height: 72px; }
 
 /* Hub */
 .hub-head { display: flex; gap: 20px; align-items: center; }
-.menu { display: grid; gap: 12px; grid-template-columns: repeat(3, 1fr); }
+.menu { display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); }
 .menu button { min-height: 110px; font-size: 1.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
 .menu button .icon { font-size: 2.2rem; }
 .xpbar { height: 14px; border-radius: 999px; background: var(--line); overflow: hidden; }
@@ -148,3 +148,15 @@ input[type=text] { font: inherit; font-size: 1.1rem; padding: 12px; border-radiu
   .menu { grid-template-columns: repeat(2, 1fr); }
   .monster { font-size: 72px; }
 }
+
+/* Mastery stars, Super Packs, ultras */
+.stars { color: #f5a524; letter-spacing: .05em; white-space: nowrap; }
+.stars .off, .dots .off { color: var(--line); }
+.dots { color: #f5a524; font-size: 1.3rem; letter-spacing: .15em; }
+.super-progress { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-weight: 700; }
+.tag { font-size: .7rem; font-weight: 800; text-transform: uppercase; background: color-mix(in srgb, var(--accent) 18%, white); color: var(--ink); padding: 2px 8px; border-radius: 999px; }
+button.super { background: linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6); color: #fff; }
+.super-card { border-color: #f5a524; background: linear-gradient(135deg, #fff8e6, #fdf0ff); }
+.rarity.ultra { background: linear-gradient(90deg, #f59e0b, #ec4899, #8b5cf6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ultra-glow .collectible, .collectible.ultra-glow { border-color: #f5a524; box-shadow: 0 0 24px rgba(245, 165, 36, .55); }
+select { font: inherit; font-size: 1rem; padding: 10px; border-radius: 12px; border: 2px solid var(--line); max-width: 100%; background: #fff; color: var(--ink); }
