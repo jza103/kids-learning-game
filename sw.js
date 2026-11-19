@@ -1,7 +1,7 @@
 // Offline support: precache the app shell, then serve from cache and refresh
 // the cache in the background (stale-while-revalidate), so updates show up on
 // the next launch. Bump VERSION when adding or removing files.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `spelling-${VERSION}`;
 const SHELL = [
   './',
@@ -25,7 +25,7 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((url) => new Request(url, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
