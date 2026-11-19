@@ -5,7 +5,9 @@ Jason's feedback: the default iPad voice sounds dated. Can we use a natural, AI-
 ## What the game does now
 The game uses the Web Speech API, so it can only use voices installed on the iPad. It now ranks the installed English voices: Premium first, then Enhanced, then the rest. It skips novelty voices like Zarvox. The grown-ups screen has a voice picker, a speed slider and a Test button.
 
-**Free fix (about 5 minutes per iPad):** go to Settings → Accessibility → Spoken Content → Voices → English. Download a **Premium** voice, such as Ava (Premium) or Zoe (Premium), or an **Enhanced** one. These are Apple's newer neural voices, and they sound far better than the compact default. They work offline, and the game picks one up automatically after a restart. Apple doesn't let web apps use the Siri voices themselves.
+**Update (2026-11-19): this didn't work.** Jason downloaded a Premium voice, but it didn't appear in the game. iOS Safari doesn't give websites access to downloaded Premium voices (WebKit bug 237584). So the realistic way to get a natural voice is pre-generated AI audio (below).
+
+~~**Free fix (about 5 minutes per iPad):** go to Settings → Accessibility → Spoken Content → Voices → English. Download a **Premium** voice, such as Ava (Premium) or Zoe (Premium), or an **Enhanced** one. These are Apple's newer neural voices, and they sound far better than the compact default. They work offline, and the game picks one up automatically after a restart. Apple doesn't let web apps use the Siri voices themselves.~~
 
 ## If that's still not good enough: pre-generated AI audio
 How it would work:
@@ -27,4 +29,4 @@ Trade-offs:
 - **Work:** about one PR (key field, audio fetch and cache, playback with fallback).
 
 ## Recommendation
-Download a Premium voice first. It's free, works offline and needs no key. If it still sounds robotic to the kids, add OpenAI or ElevenLabs as described above.
+~~Download a Premium voice first.~~ That isn't possible from Safari. Use pre-generated AI audio (OpenAI or ElevenLabs).

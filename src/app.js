@@ -20,7 +20,7 @@ import { say, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVo
 import { voiceQuality } from './voices.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-19.3';
+const APP_VERSION = '2026-11-19.4';
 const app = document.getElementById('app');
 let data = load();
 for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
@@ -372,9 +372,8 @@ const screens = {
         ${
           !speechAvailable()
             ? '<p>Speech is not available in this browser.</p>'
-            : `<p class="small muted">Words are read by a voice installed on this iPad. The game picks the best one it finds.
-                For a much more natural voice, download one on the iPad: <strong>Settings → Accessibility → Spoken Content → Voices → English</strong>,
-                then pick a voice marked <strong>Premium</strong> or <strong>Enhanced</strong> (for example Ava or Zoe) and tap download. Then reopen the game and choose it here.</p>
+            : `<p class="small muted">Words are read by a voice built into this device, and the game picks the best one the browser offers.
+                Note: on iPad, Safari only lets websites use some of the installed voices. Premium voices you download in Settings usually don't show up here; that's an Apple limit.</p>
                <div class="row">
                  <select data-action-change="voice" aria-label="Voice">
                    <option value="">Automatic (best installed${active ? `: ${esc(active.name)}` : ''})</option>
