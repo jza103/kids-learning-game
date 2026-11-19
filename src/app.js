@@ -19,6 +19,8 @@ import { load, save, requestPersistence, exportBackup, parseBackup } from './sto
 import { say, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged } from './speech.js';
 import { voiceQuality } from './voices.js';
 
+// Shown on the grown-ups screen so you can tell an update has arrived.
+const APP_VERSION = '2026-11-19.3';
 const app = document.getElementById('app');
 let data = load();
 for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
@@ -35,6 +37,7 @@ function update(p) {
   save(data);
 }
 function go(screen) {
+  if (ui.pendingReload) return location.reload();
   ui.screen = screen;
   ui.flash = '';
   render();
@@ -364,6 +367,26 @@ const screens = {
           <button type="submit" class="secondary">Add player</button>
         </form>
       </div>
+      <div class="card">
+        <h3>Voice</h3>
+        ${
+          !speechAvailable()
+            ? '<p>Speech is not available in this browser.</p>'
+            : `<p class="small muted">Words are read by a voice installed on this iPad. The game picks the best one it finds.
+                For a much more natural voice, download one on the iPad: <strong>Settings → Accessibility → Spoken Content → Voices → English</strong>,
+                then pick a voice marked <strong>Premium</strong> or <strong>Enhanced</strong> (for example Ava or Zoe) and tap download. Then reopen the game and choose it here.</p>
+               <div class="row">
+                 <select data-action-change="voice" aria-label="Voice">
+                   <option value="">Automatic (best installed${active ? `: ${esc(active.name)}` : ''})</option>
+                   ${voices
+                     .map((v) => `<option value="${esc(v.voiceURI)}" ${data.settings.voiceURI === v.voiceURI ? 'selected' : ''}>${esc(v.name)}${voiceQuality(v) ? ` (${voiceQuality(v)})` : ''} · ${esc(v.lang)}</option>`)
+                     .join('')}
+                 </select>
+                 <label class="row small">Speed <input type="range" min="0.6" max="1.1" step="0.05" value="${data.settings.rate}" data-action-change="rate"></label>
+                 <button class="secondary" data-action="test-voice">🔊 Test</button>
+               </div>`
+        }
+      </div>
       ${
         kid
           ? `<div class="card">
@@ -400,26 +423,6 @@ const screens = {
         </div>`
           : ''
       }
-      <div class="card">
-        <h3>Voice</h3>
-        ${
-          !speechAvailable()
-            ? '<p>Speech is not available in this browser.</p>'
-            : `<p class="small muted">Words are read by a voice installed on this iPad. The game picks the best one it finds.
-                For a much more natural voice, download one on the iPad: <strong>Settings → Accessibility → Spoken Content → Voices → English</strong>,
-                then pick a voice marked <strong>Premium</strong> or <strong>Enhanced</strong> (for example Ava or Zoe) and tap download. Then reopen the game and choose it here.</p>
-               <div class="row">
-                 <select data-action-change="voice" aria-label="Voice">
-                   <option value="">Automatic (best installed${active ? `: ${esc(active.name)}` : ''})</option>
-                   ${voices
-                     .map((v) => `<option value="${esc(v.voiceURI)}" ${data.settings.voiceURI === v.voiceURI ? 'selected' : ''}>${esc(v.name)}${voiceQuality(v) ? ` (${voiceQuality(v)})` : ''} · ${esc(v.lang)}</option>`)
-                     .join('')}
-                 </select>
-                 <label class="row small">Speed <input type="range" min="0.6" max="1.1" step="0.05" value="${data.settings.rate}" data-action-change="rate"></label>
-                 <button class="secondary" data-action="test-voice">🔊 Test</button>
-               </div>`
-        }
-      </div>
       <div class="card small">
         <h3>How rewards work</h3>
         <p>Coins only come from correct answers, never from finishing a round. A word pays by how well it's known:
@@ -441,7 +444,8 @@ const screens = {
           <label class="pill" style="cursor:pointer">Restore from file<input type="file" accept="application/json,.json" data-action-change="import" hidden></label>
           ${kid ? `<button class="ghost" data-action="delete-kid" data-id="${kid.id}">Remove ${esc(kid.name)}</button>` : ''}
         </div>
-      </div>`;
+      </div>
+      <p class="small muted" style="text-align:center">Version ${APP_VERSION}</p>`;
   },
 };
 
@@ -809,5 +813,7 @@ applyLook(profile());
 ui.screen = profile() ? 'hub' : 'home';
 render();
 requestPersistence();
+// A new version was installed: reload now, or after the round if one is in progress.
+window.__klgUpdate = () => (ui.screen === 'play' ? (ui.pendingReload = true) : location.reload());
 // Voices load late on some browsers; refresh the grown-ups screen when they arrive.
 onVoicesChanged(() => ui.screen === 'parent' && render());

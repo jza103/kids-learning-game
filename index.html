@@ -19,7 +19,19 @@
   <script type="module" src="src/app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+      const hadController = !!navigator.serviceWorker.controller;
+      let reloading = false;
+      // When an update takes over, load it (the app waits until a round ends).
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController || reloading) return;
+        reloading = true;
+        window.__klgUpdate ? window.__klgUpdate() : location.reload();
+      });
+      window.addEventListener('load', async () => {
+        const reg = await navigator.serviceWorker.register('sw.js');
+        // A home-screen app can stay open for days; check for updates when it comes back.
+        document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && reg.update());
+      });
     }
   </script>
 </body>
