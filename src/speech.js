@@ -1,7 +1,7 @@
 // Read words aloud. Uses saved ElevenLabs audio when it's set up and ready,
 // otherwise the browser's built-in voice (Web Speech API, works offline).
 import { bestVoice, rankVoices } from './voices.js';
-import { loadedClip, preload } from './aivoice.js';
+import { loadedClip, preload, wordClip, sentenceClip } from './aivoice.js';
 
 const prefs = { voiceURI: null, rate: 0.85, aiVoiceId: null };
 let voice = null;
@@ -55,9 +55,9 @@ export function unlockAudio() {
   audio.play().catch(() => (unlocked = false));
 }
 
-/** Get saved AI clips for these texts into memory ahead of time. */
-export function preloadSpeech(texts) {
-  return prefs.aiVoiceId ? preload(prefs.aiVoiceId, texts).catch(() => {}) : Promise.resolve();
+/** Get saved AI clips into memory ahead of time. */
+export function preloadSpeech(specs) {
+  return prefs.aiVoiceId ? preload(prefs.aiVoiceId, specs).catch(() => {}) : Promise.resolve();
 }
 
 let token = 0;
@@ -92,24 +92,32 @@ function playClip(url, my) {
   });
 }
 
-/** Speak phrases in order, e.g. [word, sentence, word]. A new call cuts off the old one. */
-export function say(...phrases) {
-  return speak(phrases, true);
+/** Say a spelling word. */
+export function sayWord(word) {
+  return speak([{ clip: wordClip(word), phrases: [word] }], true);
 }
 
-/** Same, but always with the built-in voice (for testing it). */
+/** Say the word, use it in its sentence, then say the word again. */
+export function saySentence(word, sentence) {
+  return speak([{ clip: sentenceClip(word, sentence), phrases: [word, sentence, word] }], true);
+}
+
+/** Always the built-in voice (for testing it). */
 export function sayBuiltIn(...phrases) {
-  return speak(phrases, false);
+  return speak([{ clip: null, phrases }], false);
 }
 
-async function speak(phrases, allowAi) {
+async function speak(parts, allowAi) {
   const my = ++token;
   if (speechAvailable()) speechSynthesis.cancel();
   audio?.pause();
-  for (const text of phrases.filter(Boolean)) {
+  for (const { clip, phrases } of parts) {
     if (my !== token) return;
-    const url = allowAi && audio && loadedClip(prefs.aiVoiceId, text);
-    const played = url ? await playClip(url, my) : false;
-    if (!played) await speakBuiltIn(text, my);
+    const url = allowAi && audio && loadedClip(prefs.aiVoiceId, clip);
+    if (url && (await playClip(url, my))) continue;
+    for (const text of phrases.filter(Boolean)) {
+      if (my !== token) return;
+      await speakBuiltIn(text, my);
+    }
   }
 }

@@ -13,25 +13,64 @@ export function normalizeText(text) {
   return String(text || '').replace(/\s+/g, ' ').trim();
 }
 
+// How clips are made. A word said on its own sounds odd to the AI voice, so
+// each request carries spelling-test context (previous_text), the word and its
+// sentence are one clip so the word sounds the same every time, and the voice
+// is tuned to be steady and a little slow. Bump CLIP_STYLE when this changes
+// so old clips are made again.
+export const CLIP_STYLE = 2;
+export const WORD_CONTEXT = 'Spelling test. Listen carefully. The next word is:';
+export const SENTENCE_CONTEXT = 'Spelling test. I will say the word, use it in a sentence, then say the word again.';
+export const PAUSE = '<break time="0.8s" />';
+export const VOICE_SETTINGS = { stability: 0.8, similarity_boost: 0.75, style: 0, use_speaker_boost: true, speed: 0.9 };
+
+/** The word as it should be read: no trailing punctuation the parent typed. */
+function cleanWord(word) {
+  return normalizeText(word).replace(/[.!?,;:]+$/, '');
+}
+
+/** End a sentence with punctuation so the voice finishes it naturally. */
+function cleanSentence(sentence) {
+  const s = normalizeText(sentence);
+  return s && !/[.!?]["')\]]?$/.test(s) ? `${s}.` : s;
+}
+
+/** The clip for a word on its own. */
+export function wordClip(word) {
+  const w = cleanWord(word);
+  return { id: `v${CLIP_STYLE}/word/${w}`, text: `${w}.`, previous: WORD_CONTEXT };
+}
+
+/** One clip for "word. sentence. word.", spoken in a single breath of context. */
+export function sentenceClip(word, sentence) {
+  const w = cleanWord(word);
+  const s = cleanSentence(sentence);
+  return { id: `v${CLIP_STYLE}/sentence/${w}/${s}`, text: `${w}. ${PAUSE} ${s} ${PAUSE} ${w}.`, previous: SENTENCE_CONTEXT };
+}
+
 /** Cache key for a clip. Not a real URL; it only names the stored audio. */
-export function clipUrl(voiceId, text) {
-  return `https://audio.local/${encodeURIComponent(voiceId)}/${encodeURIComponent(normalizeText(text))}`;
+export function clipUrl(voiceId, clipId) {
+  return `https://audio.local/${encodeURIComponent(voiceId)}/${encodeURIComponent(clipId)}`;
 }
 
-/** Every word and example sentence in these profiles, without repeats. */
-export function clipTexts(profiles) {
-  const out = new Set();
-  for (const p of profiles) {
-    for (const w of p.words || []) {
-      if (normalizeText(w.word)) out.add(normalizeText(w.word));
-      if (normalizeText(w.sentence)) out.add(normalizeText(w.sentence));
-    }
-  }
-  return [...out];
+/** The clips a word needs: the word, plus word-sentence-word if it has a sentence. */
+export function clipsForWord(w) {
+  const out = [];
+  if (cleanWord(w.word)) out.push(wordClip(w.word));
+  if (cleanWord(w.word) && normalizeText(w.sentence)) out.push(sentenceClip(w.word, w.sentence));
+  return out;
 }
 
-export function charCount(texts) {
-  return texts.reduce((n, t) => n + t.length, 0);
+/** Every clip these profiles need, without repeats. */
+export function clipSpecs(profiles) {
+  const out = new Map();
+  for (const p of profiles) for (const w of p.words || []) for (const c of clipsForWord(w)) out.set(c.id, c);
+  return [...out.values()];
+}
+
+/** ElevenLabs characters these clips use (the pause tags are left out). */
+export function charCount(specs) {
+  return specs.reduce((n, c) => n + c.text.split(PAUSE).join('').length, 0);
 }
 
 // ElevenLabs' standard voices, used when the key isn't allowed to list voices
@@ -121,11 +160,18 @@ export async function listVoices(key) {
     .sort((a, b) => (b.category === 'premade') - (a.category === 'premade') || a.name.localeCompare(b.name));
 }
 
-export async function generateClip(key, voiceId, text) {
+/** The request body for a clip (exported for tests). */
+export function clipRequest(spec) {
+  return { text: spec.text, model_id: MODEL_ID, previous_text: spec.previous, voice_settings: VOICE_SETTINGS };
+}
+
+/** spec: a clip from wordClip/sentenceClip, or plain text. */
+export async function generateClip(key, voiceId, spec) {
+  const clip = typeof spec === 'string' ? { text: normalizeText(spec) } : spec;
   const res = await api(`/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, key, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-    body: JSON.stringify({ text: normalizeText(text), model_id: MODEL_ID, voice_settings: { stability: 0.6, similarity_boost: 0.75 } }),
+    body: JSON.stringify(clipRequest(clip)),
   });
   return res.blob();
 }
@@ -137,31 +183,31 @@ async function audioCache() {
   return caches.open(AUDIO_CACHE);
 }
 
-export async function hasClip(voiceId, text) {
+export async function hasClip(voiceId, spec) {
   if (typeof caches === 'undefined') return false;
-  return Boolean(await (await audioCache()).match(clipUrl(voiceId, text)));
+  return Boolean(await (await audioCache()).match(clipUrl(voiceId, spec.id)));
 }
 
-/** Count how many of these texts already have audio for this voice. */
-export async function countReady(voiceId, texts) {
+/** Count how many of these clips are already saved for this voice. */
+export async function countReady(voiceId, specs) {
   let n = 0;
-  for (const t of texts) if (await hasClip(voiceId, t)) n++;
+  for (const c of specs) if (await hasClip(voiceId, c)) n++;
   return n;
 }
 
 /**
- * Generate and save audio for any texts that don't have it yet. Stops at the
- * first key or quota problem. onProgress(done, total) after each clip.
+ * Generate and save any clips that don't exist yet. Stops at the first key or
+ * quota problem. onProgress(done, total) after each clip.
  */
-export async function prepareClips(key, voiceId, texts, onProgress = () => {}) {
+export async function prepareClips(key, voiceId, specs, onProgress = () => {}) {
   const cache = await audioCache();
   const missing = [];
-  for (const t of texts) if (!(await cache.match(clipUrl(voiceId, t)))) missing.push(t);
+  for (const c of specs) if (!(await cache.match(clipUrl(voiceId, c.id)))) missing.push(c);
   let made = 0;
-  for (const t of missing) {
+  for (const c of missing) {
     try {
-      const blob = await generateClip(key, voiceId, t);
-      await cache.put(clipUrl(voiceId, t), new Response(blob, { headers: { 'Content-Type': 'audio/mpeg' } }));
+      const blob = await generateClip(key, voiceId, c);
+      await cache.put(clipUrl(voiceId, c.id), new Response(blob, { headers: { 'Content-Type': 'audio/mpeg' } }));
       made++;
       onProgress(made, missing.length);
     } catch (err) {
@@ -172,11 +218,11 @@ export async function prepareClips(key, voiceId, texts, onProgress = () => {}) {
 }
 
 /** Load saved clips into memory so they can play instantly (keeps iPad happy). */
-export async function preload(voiceId, texts) {
+export async function preload(voiceId, specs) {
   if (typeof caches === 'undefined' || !voiceId) return;
   const cache = await audioCache();
-  for (const t of texts) {
-    const k = clipUrl(voiceId, t);
+  for (const c of specs) {
+    const k = clipUrl(voiceId, c.id);
     if (objectUrls.has(k)) continue;
     const res = await cache.match(k);
     if (res) objectUrls.set(k, URL.createObjectURL(await res.blob()));
@@ -184,8 +230,28 @@ export async function preload(voiceId, texts) {
 }
 
 /** A ready-to-play URL for a clip that has been preloaded, or null. */
-export function loadedClip(voiceId, text) {
-  return voiceId ? objectUrls.get(clipUrl(voiceId, text)) || null : null;
+export function loadedClip(voiceId, spec) {
+  return voiceId && spec ? objectUrls.get(clipUrl(voiceId, spec.id)) || null : null;
+}
+
+/** Which saved clip URLs are no longer needed (deleted words, old clip styles). */
+export function staleClipUrls(savedUrls, specs) {
+  const keep = new Set(specs.map((c) => encodeURIComponent(c.id)));
+  return savedUrls.filter((u) => !keep.has(u.split('/').pop()));
+}
+
+/** Delete saved audio that no word needs any more, for every voice. */
+export async function pruneClips(specs) {
+  if (typeof caches === 'undefined') return 0;
+  const cache = await audioCache();
+  const stale = staleClipUrls((await cache.keys()).map((r) => r.url), specs);
+  for (const u of stale) {
+    await cache.delete(u);
+    const obj = objectUrls.get(u);
+    if (obj) URL.revokeObjectURL(obj);
+    objectUrls.delete(u);
+  }
+  return stale.length;
 }
 
 export async function clearClips() {

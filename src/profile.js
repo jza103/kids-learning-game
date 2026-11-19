@@ -96,8 +96,43 @@ export function addWords(profile, entries, now) {
   return { profile: { ...profile, words, srs, currentBatch: batch }, added, returning };
 }
 
+/**
+ * Delete a word completely (e.g. a typo): it leaves the bank and its stars and
+ * history are erased, so adding it again starts fresh. Coins, cards and packs
+ * already earned are kept.
+ */
 export function removeWord(profile, wordId) {
-  return { ...profile, words: profile.words.filter((w) => w.id !== wordId) };
+  const srs = { ...profile.srs };
+  const wasMastered = Boolean(srs[wordId]?.masteredAt);
+  delete srs[wordId];
+  return {
+    ...profile,
+    words: profile.words.filter((w) => w.id !== wordId),
+    srs,
+    masteredWords: Math.max(0, (profile.masteredWords || 0) - (wasMastered ? 1 : 0)),
+  };
+}
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Tips for one typed entry ({ word, sentence }), shown while the grown-up
+ * types so the words and sentences come out right when read aloud.
+ */
+export function entryWarnings({ word, sentence }) {
+  const out = [];
+  const w = normalize(word).replace(/[.!?,;:]+$/, '');
+  const s = normalize(sentence || '');
+  if (/[0-9]|[^\p{L}\s'.-]/u.test(w)) out.push('The word has numbers or symbols in it. Check the spelling.');
+  if (w.split(' ').length > 3) out.push('That looks like a sentence. Put a | between the word and its sentence.');
+  if (!s) return out;
+  const re = escapeRe(w);
+  if (!new RegExp(`(^|[^\\p{L}'])${re}($|[^\\p{L}'])`, 'u').test(s)) out.push(`The sentence doesn't use “${w}” exactly. Use the word as spelled so the kids hear it.`);
+  const startsWithWord = new RegExp(`^${re}\\s*[.:–—-]\\s*\\S`, 'u').test(s);
+  const endsWithWord = new RegExp(`[.!?]\\s*[–—-]?\\s*${re}[.!?]?$`, 'u').test(s);
+  if (startsWithWord || endsWithWord) out.push('Just write the sentence. The game says the word before and after it for you.');
+  if (s.length > 120) out.push('Shorter sentences are easier to listen to.');
+  return out;
 }
 
 /** Bring a profile saved by an older version up to date. */

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newProfile, parseWordList, addWords, currentWords, activeItems, recordAnswer, pickPracticeWord, migrateProfile, removeWord, MAX_REVIEW_PER_ROUND } from '../src/profile.js';
+import { newProfile, parseWordList, addWords, currentWords, activeItems, recordAnswer, pickPracticeWord, migrateProfile, removeWord, entryWarnings, MAX_REVIEW_PER_ROUND } from '../src/profile.js';
 import { review, MAX_BOX, masteryRating, INTERVALS } from '../src/srs.js';
 import { rewardMastery, openSuperPack, craft, MASTERY_COINS, SUPER_PACK_EVERY, SUPER_PACK_SHARDS, openPack, PACK_COST } from '../src/economy.js';
 import { THEMES, ALL_ITEMS } from '../src/content.js';
@@ -37,6 +37,31 @@ test('the word bank grows week to week; returning words keep their mastery', () 
   assert.equal(activeItems(p).length, 3);
   p = removeWord(p, 'dog');
   assert.deepEqual(p.words.map((w) => w.id), ['cat', 'fish']);
+});
+
+test('deleting a word erases its stars, so adding it again starts fresh', () => {
+  let p = addWords(newProfile('A', T0), parseWordList('becuase\ncat'), T0).profile;
+  p = masterWord(p, 'becuase', T0).profile;
+  p = { ...p, coins: 99 };
+  assert.equal(p.masteredWords, 1);
+  p = removeWord(p, 'becuase');
+  assert.equal(p.srs.becuase, undefined);
+  assert.equal(p.masteredWords, 0);
+  assert.equal(p.coins, 99, 'earned coins stay');
+  p = addWords(p, parseWordList('becuase'), T0 + WEEK).profile;
+  assert.equal(p.srs.becuase.box, 0);
+});
+
+test('word entry tips catch sentences that will read badly', () => {
+  assert.deepEqual(entryWarnings({ word: 'because', sentence: 'I stayed inside because it rained.' }), []);
+  assert.deepEqual(entryWarnings({ word: 'because', sentence: 'Because it rained, I stayed in.' }), []);
+  assert.deepEqual(entryWarnings({ word: 'because', sentence: '' }), []);
+  assert.match(entryWarnings({ word: 'because', sentence: 'Because. I stayed inside because it rained. Because.' }).join(), /before and after/);
+  assert.match(entryWarnings({ word: 'because', sentence: 'I stayed inside because it rained. because' }).join(), /before and after/);
+  assert.match(entryWarnings({ word: 'friend', sentence: 'My friends live next door.' }).join(), /exactly/);
+  assert.match(entryWarnings({ word: "don't", sentence: 'I don’t know.' }).join() || 'ok', /ok/);
+  assert.match(entryWarnings({ word: 'fr1end', sentence: '' }).join(), /numbers/);
+  assert.match(entryWarnings({ word: 'my friend lives next door', sentence: '' }).join(), /\|/);
 });
 
 test('mastery rating follows the box', () => {

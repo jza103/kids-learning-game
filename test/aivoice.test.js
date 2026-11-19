@@ -1,19 +1,36 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clipUrl, clipTexts, charCount, normalizeText, explainError } from '../src/aivoice.js';
+import { clipUrl, clipSpecs, wordClip, sentenceClip, clipRequest, staleClipUrls, charCount, normalizeText, explainError, PAUSE } from '../src/aivoice.js';
 
-test('clip keys are stable for the same text and differ by voice', () => {
-  assert.equal(clipUrl('v1', ' because  '), clipUrl('v1', 'because'));
-  assert.notEqual(clipUrl('v1', 'because'), clipUrl('v2', 'because'));
-  assert.ok(clipUrl('v1', "don't stop").includes(encodeURIComponent("don't stop")));
+test('clip keys are stable and differ by voice', () => {
+  assert.equal(clipUrl('v1', wordClip(' because  ').id), clipUrl('v1', wordClip('because').id));
+  assert.notEqual(clipUrl('v1', 'x'), clipUrl('v2', 'x'));
 });
 
-test('clipTexts collects every word and sentence once, across players', () => {
+test('a word is read with spelling-test context; a sentence is one word-sentence-word clip', () => {
+  const w = wordClip('because.');
+  assert.equal(w.text, 'because.');
+  assert.match(w.previous, /spelling/i);
+  const s = sentenceClip('because', 'I stayed inside because it rained');
+  assert.equal(s.text, `because. ${PAUSE} I stayed inside because it rained. ${PAUSE} because.`);
+  const body = clipRequest(s);
+  assert.equal(body.previous_text, s.previous);
+  assert.ok(body.voice_settings.stability >= 0.7);
+});
+
+test('clipSpecs collects every clip once, across players', () => {
   const a = { words: [{ word: 'because', sentence: 'I stayed in because it rained.' }, { word: 'said', sentence: '' }] };
-  const b = { words: [{ word: 'because', sentence: '' }, { word: 'friend', sentence: 'My  friend  is here.' }] };
-  assert.deepEqual(clipTexts([a, b]), ['because', 'I stayed in because it rained.', 'said', 'friend', 'My friend is here.']);
-  assert.equal(charCount(['ab', 'cde']), 5);
+  const b = { words: [{ word: 'because', sentence: 'I stayed in because it rained.' }, { word: 'friend', sentence: '' }] };
+  const specs = clipSpecs([a, b]);
+  assert.equal(specs.length, 4);
+  assert.equal(charCount([wordClip('ab')]), 3);
   assert.equal(normalizeText(null), '');
+});
+
+test('saved audio for deleted words and old clip styles is found for clean-up', () => {
+  const keep = [wordClip('cat'), sentenceClip('cat', 'The cat sat.')];
+  const saved = [clipUrl('v1', keep[0].id), clipUrl('v2', keep[1].id), clipUrl('v1', wordClip('becuase').id), clipUrl('v1', 'cat')];
+  assert.deepEqual(staleClipUrls(saved, keep), [saved[2], saved[3]]);
 });
 
 test('API errors become plain-language messages', () => {

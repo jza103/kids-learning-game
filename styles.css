@@ -160,3 +160,6 @@ button.super { background: linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6); c
 .rarity.ultra { background: linear-gradient(90deg, #f59e0b, #ec4899, #8b5cf6); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .ultra-glow .collectible, .collectible.ultra-glow { border-color: #f5a524; box-shadow: 0 0 24px rgba(245, 165, 36, .55); }
 select { font: inherit; font-size: 1rem; padding: 10px; border-radius: 12px; border: 2px solid var(--line); max-width: 100%; background: #fff; color: var(--ink); }
+.warn { color: #9a5b00; font-size: 0.9em; margin-top: 4px; }
+.nowrap { white-space: nowrap; }
+table.check td { vertical-align: top; }
