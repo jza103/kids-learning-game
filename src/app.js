@@ -16,6 +16,7 @@ import {
   newProfile, addWords, removeWord, migrateProfile, currentWords, activeItems, recordAnswer, checkSpelling,
   pickPracticeWord, entryWarnings, cleanEntries,
 } from './profile.js';
+import { TRICKY_SETS, trickyState, setTricky, autoTricky, addTrickySet, readyForMore, setsLeft, trickySetEntries, WEEK_MS, READY_STARS } from './tricky.js';
 import { load, save, requestPersistence, exportBackup, parseBackup } from './storage.js';
 import { createVocab, VOCAB_SCREENS } from './vocab-ui.js';
 import { sayWord, saySentence, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged, unlockAudio, preloadSpeech, sayBuiltIn } from './speech.js';
@@ -45,7 +46,23 @@ function applySpeech() {
 function allClipSpecs() {
   return clipSpecs(Object.values(data.profiles));
 }
-const ui = { screen: 'home', game: null, reveal: null, packTheme: null, parentKid: null, flash: '' };
+const ui = { screen: 'home', game: null, reveal: null, packTheme: null, parentKid: null, flash: '', hubNote: '' };
+
+/** Add this week's tricky-words set if one is due (see tricky.js). */
+function checkTricky() {
+  const p = profile();
+  const r = p && autoTricky(p, Date.now());
+  if (!r) return;
+  update(r.profile);
+  ui.hubNote = `🔤 New tricky words this week: ${r.set.name}!`;
+  setTimeout(prepareAllClips, 0);
+}
+
+/** This week's tricky set, if this week's words came from the list. */
+function currentTrickySet(p) {
+  const st = trickyState(p);
+  return st.on && st.batch != null && st.batch === p.currentBatch ? TRICKY_SETS[st.next - 1] : null;
+}
 
 // ---------- helpers ----------
 const esc = (s) =>
@@ -192,6 +209,8 @@ const screens = {
           <div class="xpbar"><div style="width:${(100 * lp.into) / lp.needed}%"></div></div>
         </div>
       </div>
+      ${ui.hubNote ? `<div class="card" style="border-color:var(--good)">${esc(ui.hubNote)}</div>` : ''}
+      ${trickyHubHtml(p)}
       ${
         p.words.length
           ? `<p class="muted">This week: ${week.length} words · ${weekSum.mastered} mastered · ${p.masteredWords || 0} mastered all time</p>`
@@ -460,6 +479,7 @@ const screens = {
         ${aiVoiceHtml()}
       </div>
       ${math.parentHtml(kid)}
+      ${kid ? trickyParentHtml(kid) : ''}
       ${
         kid
           ? `<div class="card">
@@ -865,6 +885,37 @@ function submitAnswer(value) {
   }
 }
 
+// ---------- tricky words ----------
+function trickyHubHtml(p) {
+  const set = currentTrickySet(p);
+  if (!set) return '';
+  return `<div class="card small"><strong>🔤 Tricky words: ${esc(set.name)}</strong><br>${esc(set.tip)}
+    ${readyForMore(p) ? `<div style="margin-top:8px"><button class="secondary" data-action="tricky-more">Ready for 10 more tricky words</button></div>` : ''}</div>`;
+}
+
+function trickyParentHtml(kid) {
+  const st = trickyState(kid);
+  const left = setsLeft(kid);
+  const set = currentTrickySet(kid);
+  const nextSet = TRICKY_SETS[st.next];
+  const daysToNext = st.lastAt == null ? 0 : Math.max(0, Math.ceil((st.lastAt + WEEK_MS - Date.now()) / 864e5));
+  return `<div class="card">
+    <h3>Tricky words list (grades 5–6)</h3>
+    <p class="small muted">For a kid who doesn't get spelling words from school: ${TRICKY_SETS.length} sets of 10 commonly misspelled and tricky words, each with a sentence and a spelling tip.
+      Each week the next set becomes ${esc(kid.name)}'s words for the week. They get stars, mastery and Super Packs like any other words, and older sets come back for review.
+      If ${esc(kid.name)} gets every word of the week to ${READY_STARS}+ stars early, a button lets them take the next set right away.</p>
+    <label class="row"><input type="checkbox" data-action-change="tricky" ${st.on ? 'checked' : ''}> Use the tricky words list for ${esc(kid.name)}</label>
+    ${
+      st.next
+        ? `<p class="small">Set ${st.next} of ${TRICKY_SETS.length}${set ? ` (this week): <strong>${esc(set.name)}</strong>` : ''}.
+            ${!left ? 'All sets added.' : st.on ? `Next set${nextSet ? ` (${esc(nextSet.name)})` : ''} ${daysToNext ? `in ${daysToNext} day${daysToNext === 1 ? '' : 's'}` : 'next time they open the game'}.` : 'Paused.'}</p>`
+        : ''
+    }
+    ${st.on && nextSet ? `<p class="small muted">Coming up: ${trickySetEntries(st.next).map((e) => esc(e.word)).join(', ')}</p>
+      <button class="secondary" data-action="tricky-next">Add the next set now</button>` : ''}
+  </div>`;
+}
+
 // ---------- events ----------
 const actions = {
   go: (d) => go(d.to),
@@ -872,9 +923,30 @@ const actions = {
     data.activeId = d.id;
     save(data);
     applyLook(profile());
+    ui.hubNote = '';
+    checkTricky();
     go('hub');
   },
+  'tricky-more': () => {
+    const r = addTrickySet(profile(), Date.now());
+    if (!r) return;
+    update(r.profile);
+    ui.hubNote = `🔤 New tricky words: ${r.set.name}!`;
+    setTimeout(prepareAllClips, 0);
+    render();
+  },
+  'tricky-next': () => {
+    const kid = data.profiles[ui.parentKid];
+    const r = kid && addTrickySet(kid, Date.now());
+    if (!r) return;
+    update(r.profile);
+    ui.flash = `${kid.name}'s words this week: tricky set ${trickyState(r.profile).next}, ${r.set.name}.`;
+    setTimeout(prepareAllClips, 0);
+    render();
+    window.scrollTo(0, 0);
+  },
   play: () => {
+    ui.hubNote = '';
     unlockAudio();
     startRound();
   },
@@ -1107,6 +1179,19 @@ app.addEventListener('change', async (e) => {
     if (e.target.checked) prepareAllClips();
     return;
   }
+  if (kind === 'tricky') {
+    const kid = data.profiles[ui.parentKid];
+    if (!kid) return;
+    const before = trickyState(kid).next;
+    const next = setTricky(kid, e.target.checked, Date.now());
+    update(next);
+    ui.flash = !e.target.checked ? `Tricky words paused for ${kid.name}. Their words and stars stay.`
+      : before === 0 ? `Tricky words are on for ${kid.name}. This week's set: ${TRICKY_SETS[0].name}.` : `Tricky words are back on for ${kid.name}.`;
+    if (!before && e.target.checked) setTimeout(prepareAllClips, 0);
+    render();
+    window.scrollTo(0, 0);
+    return;
+  }
   if (kind !== 'import') return;
   const file = e.target.files[0];
   if (!file) return;
@@ -1158,6 +1243,7 @@ function render(opts = {}) {
 
 applyLook(profile());
 ui.screen = profile() ? 'hub' : 'home';
+checkTricky();
 render();
 requestPersistence();
 // A new version was installed: reload now, or after the round if one is in progress.

@@ -33,6 +33,11 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - **Friends grow** (`src/friends.js`, 2026-11-20): each friend specializes in spelling, math or vocab, and its power only works in games it knows. Team friends get XP from answers (capped daily), level up, and evolve into ✨ Super Friends (level 5) and 💖 Best Friends (level 10), getting stronger. A friend brought to a game it doesn't know learns it over about a week of play. Other games plug in with `teamPowersFor` and `friendsAfterAnswer` (see `src/games.js`). Pacing math: `docs/friends-pacing.md`.
 - **XP / Locker:** cosmetic only (hero, hat, color, title).
 
+## Tricky words list (grades 5–6)
+- For a kid who no longer gets school spelling words (Jason's 5th grader, 2026-11-20). 200 commonly misspelled and tricky words in 20 sets of 10, each set sharing a pattern (ough words, i before e, sound-alikes like their/there/they're, -able/-ible, silent letters...) with a sentence per word and a spelling tip per set. Later sets are 6th-grade and stretch words. List in `src/tricky-words.js`, logic in `src/tricky.js` (tested in `test/tricky.test.js`).
+- Grown-ups screen: a checkbox per kid. Turning it on adds set 1 as this week's words; after that the next set is added the first time the kid opens the game a week or more later (never more than one at a time, so a break doesn't pile up words). "Add the next set now" skips ahead.
+- The words are normal word-bank words: same stars, coins, mastery rewards and Super Packs, and older sets come back for review. No slowdown for fast learners: once every word of this week's set has 3+ stars, the kid sees a "Ready for 10 more tricky words" button on the home screen.
+
 ## How the times tables game works
 - **Facts:** × and ÷ tables 0–12 (169 × facts, 156 ÷ facts, no ÷0). Each fact has its own 0–5 star rating, using the same scheduler as spelling words (`src/math.js`, stored in `profile.math`).
 - **Modes:** Multiply, Divide, and Mixed (advanced). Kids pick "Smart mix" or any single table. Smart mix starts with 0, 1, 2, 10, 5 and opens the next table when 80% of open facts have 2+ stars. At most 5 new facts per round.
@@ -70,6 +75,7 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 
 ## Where we left off
 - Last done (2026-11-20): school-year reward plan (monthly themes, gold versions, Legendaries), mastery refresh, and no waiting between math stars.
+- Also (2026-11-20): built-in tricky words list (grades 5–6, 200 words, one set of 10 a week, early unlock at 3 stars) for Jason's 5th grader, who no longer gets school spelling words.
 - Before that (2026-11-20): facts with 0, 1 or 2 became warm-ups (no coins or mastery), after a tester ground the 0s table.
 - Before that (2026-11-20): daily coin pace (full to 300, half to 500, 1 each to 600, then full for the day) and rising pack prices (60, 60, 80, 100, 120), after a tester earned 1,000+ coins in 30 minutes.
 - Before that (2026-11-20): daily pack cap 3 → 5 and two new themes (Farm, Sweets), so there are 60 friends. Capped every day, the 50 pack friends take about 12 days (10–15), the same as the old 36 at 3 a day; a kid playing 2 rounds a day has coins for about 3 packs, so about 3 weeks. The 10 ultras need 50 mastered words. Pace math in `docs/friends-pacing.md`.
