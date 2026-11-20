@@ -1,6 +1,6 @@
 // Coins, packs, shards and crafting. All functions are pure: they take a
 // profile and return a new one, so they're easy to test.
-import { THEMES, ITEMS_BY_ID, ALL_ITEMS } from './content.js';
+import { THEMES, ITEMS_BY_ID, ALL_ITEMS, themesOpen, GOLD_RARITIES } from './content.js';
 import { weightedPick, dayKey } from './rng.js';
 
 // --- Coins: earned per correct answer, never for just finishing a round. ---
@@ -130,8 +130,8 @@ export function pickItem(theme, rarity, collection, rng = Math.random) {
 export function openPack(profile, themeId, now, rng = Math.random) {
   const check = canOpenPack(profile, now);
   if (!check.ok) throw new Error(`cannot open pack: ${check.reason}`);
-  const theme = THEMES.find((t) => t.id === themeId);
-  if (!theme) throw new Error(`unknown theme: ${themeId}`);
+  const theme = themesOpen(now).find((t) => t.id === themeId);
+  if (!theme) throw new Error(`unknown or not yet open theme: ${themeId}`);
 
   const today = dayKey(now);
   const prev = profile.packs;
@@ -196,27 +196,48 @@ export function rewardMastery(profile) {
   };
 }
 
+/** Owned rares, epics and ultras that aren't gold yet. */
+export function goldCandidates(profile, items) {
+  const gold = profile.gold || {};
+  return items.filter((i) => GOLD_RARITIES.includes(i.rarity) && profile.collection[i.id] && !gold[i.id]);
+}
+
 /**
- * Open a Super Pack: a guaranteed ultra from the chosen theme. If that theme's
- * ultras are all owned, any missing ultra; then any missing friend in the
- * theme; and if the whole collection is done, shards. Not limited by the daily cap.
+ * Open a Super Pack (not limited by the daily cap). In order, the first that
+ * has something: a missing ultra from the chosen theme; a gold version of a
+ * rare/epic/ultra you own in that theme; a missing ultra from any open theme;
+ * a gold version from any open theme; any missing friend in the theme; shards.
  */
-export function openSuperPack(profile, themeId, rng = Math.random) {
+export function openSuperPack(profile, themeId, rng = Math.random, now = Date.now()) {
   if (!(profile.superPacks > 0)) throw new Error('no super packs');
-  const theme = THEMES.find((t) => t.id === themeId);
-  if (!theme) throw new Error(`unknown theme: ${themeId}`);
+  const open = themesOpen(now);
+  const theme = open.find((t) => t.id === themeId);
+  if (!theme) throw new Error(`unknown or not yet open theme: ${themeId}`);
+  const openItems = open.flatMap((t) => t.items.map((i) => ({ ...i, theme: t.id })));
+  const themeItems = theme.items.map((i) => ({ ...i, theme: theme.id }));
   const missing = (items) => items.filter((i) => !profile.collection[i.id]);
-  const pool =
-    [missing(theme.items.filter((i) => i.rarity === 'ultra')), missing(ALL_ITEMS.filter((i) => i.rarity === 'ultra')), missing(theme.items)].find(
-      (p) => p.length,
-    ) || [];
+  const ultras = (items) => items.filter((i) => i.rarity === 'ultra');
+  const steps = [
+    { pool: missing(ultras(themeItems)), gold: false },
+    { pool: goldCandidates(profile, themeItems), gold: true },
+    { pool: missing(ultras(openItems)), gold: false },
+    { pool: goldCandidates(profile, openItems), gold: true },
+    { pool: missing(themeItems), gold: false },
+  ];
+  const step = steps.find((s) => s.pool.length);
   const next = { ...profile, superPacks: profile.superPacks - 1 };
-  if (!pool.length) {
+  if (!step) {
     return { profile: { ...next, shards: profile.shards + SUPER_PACK_SHARDS }, result: { item: null, shards: SUPER_PACK_SHARDS, super: true } };
   }
-  const item = pool[Math.floor(rng() * pool.length)];
+  const item = step.pool[Math.floor(rng() * step.pool.length)];
+  if (step.gold) {
+    return {
+      profile: { ...next, gold: { ...(profile.gold || {}), [item.id]: true } },
+      result: { item, rarity: item.rarity, gold: true, duplicate: false, shards: 0, super: true, themeId: item.theme },
+    };
+  }
   return {
     profile: { ...next, collection: { ...profile.collection, [item.id]: 1 } },
-    result: { item, rarity: item.rarity, duplicate: false, shards: 0, super: true, themeId: item.theme || themeId },
+    result: { item, rarity: item.rarity, duplicate: false, shards: 0, super: true, themeId: item.theme },
   };
 }

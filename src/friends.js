@@ -1,7 +1,7 @@
 // Friend growth: specialties, friend XP, levels, evolution and learning new
 // game types. Pure functions (profile in, new profile out). Pacing math and the
 // reasons behind these numbers: docs/friends-pacing.md.
-import { ITEMS_BY_ID, RARITY_STRENGTH } from './content.js';
+import { ITEMS_BY_ID, RARITY_STRENGTH, GOLD_BONUS } from './content.js';
 import { TEAM_SIZE } from './progress.js';
 import { dayKey } from './rng.js';
 
@@ -63,7 +63,8 @@ export function friendInfo(profile, id, now = Date.now()) {
     item,
     level,
     stage,
-    strength: RARITY_STRENGTH[item.rarity] + stage.bonus,
+    gold: Boolean(profile.gold?.[id]),
+    strength: RARITY_STRENGTH[item.rarity] + stage.bonus + (profile.gold?.[id] ? GOLD_BONUS : 0),
     knows,
     into: s.xp - start,
     needed: end - start,

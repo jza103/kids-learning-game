@@ -3,6 +3,7 @@
 // functions: they take a profile and return a new one.
 import { newItem, review, isDue, pickNext, MAX_BOX, INTERVALS } from './srs.js';
 import { coinsForAnswer, earnCoins, SUPER_PACK_EVERY, BOX_COINS } from './economy.js';
+import { claimLegends } from './legend.js';
 import { XP_PER, applyXpBoost } from './progress.js';
 
 export const GAME_TYPE = 'math';
@@ -234,7 +235,9 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
     }
   }
   next.math = nextState;
-  return { profile: next, coins, xp, mastered, superStep, battleResult: srsResult, warmup };
+  let legends = [];
+  if (mastered) ({ profile: next, newly: legends } = claimLegends(next));
+  return { profile: next, coins, xp, mastered, superStep, battleResult: srsResult, warmup, legends };
 }
 
 // ---------- solve times ----------

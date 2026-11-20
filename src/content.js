@@ -17,9 +17,10 @@ export const POWER_INFO = {
 };
 
 // 'ultra' only comes from Super Packs, which are earned by mastering words.
-export const RARITIES = ['common', 'rare', 'epic', 'ultra'];
+// 'legendary' only comes from finishing a set (see LEGENDS).
+export const RARITIES = ['common', 'rare', 'epic', 'ultra', 'legendary'];
 // Strength of a collectible's power by rarity.
-export const RARITY_STRENGTH = { common: 1, rare: 2, epic: 3, ultra: 4 };
+export const RARITY_STRENGTH = { common: 1, rare: 2, epic: 3, ultra: 4, legendary: 5 };
 
 // specialty: the game type ('spelling' | 'math' | 'vocab', see games.js) where
 // this friend's power works. Friends can learn more game types; see friends.js.
@@ -128,8 +129,115 @@ export const THEMES = [
   },
 ];
 
+
+// Monthly themes: one new 12-friend theme around the start of each month
+// through June, so there's always a new set to start. `from` is the local
+// date it appears (packs, collection, Super Packs).
+const SPEC_ROT = [
+  ['spelling', 'math', 'vocab'],
+  ['math', 'vocab', 'spelling'],
+  ['vocab', 'spelling', 'math'],
+];
+const SPEC_PATTERN = [0, 1, 2, 0, 2, 1, 0, 2, 1, 0, 2, 1]; // 4 per game type
+const POWER_PATTERN = ['buddy', 'shield', 'power', 'hint', 'xp', 'hint', 'power', 'shield', 'xp', 'buddy', 'hint', 'power'];
+const TIERS = ['common', 'common', 'common', 'common', 'common', 'common', 'rare', 'rare', 'rare', 'epic', 'ultra', 'ultra'];
+function monthly(n, id, name, emoji, reward, from, list) {
+  return {
+    id, name, emoji, reward, from,
+    items: list.map(([key, fname, femoji], i) =>
+      c(`${id}-${key}`, fname, femoji, TIERS[i], POWER_PATTERN[i < 6 ? (i + n) % 6 : i], SPEC_ROT[n % 3][SPEC_PATTERN[i]]),
+    ),
+  };
+}
+
+THEMES.push(
+  monthly(0, 'winter', 'Winter', '⛄', 'Snow Champion', '2026-12-01', [
+    ['penguin', 'Waddles', '🐧'], ['snowman', 'Mr. Carrot', '☃️'], ['mitten', 'Mitts', '🧤'], ['cocoa', 'Cocoa', '☕'],
+    ['scarf', 'Scarfy', '🧣'], ['sled', 'Slider', '🛷'], ['polarbear', 'Polar Pete', '🐻‍❄️'], ['skate', 'Glide', '⛸️'],
+    ['seal', 'Blubber', '🦭'], ['snowflake', 'Crystal', '❄️'], ['tree', 'Evergreen', '🎄'], ['blizzard', 'Blizzard', '🌨️'],
+  ]),
+  monthly(1, 'dinos', 'Dinos', '🦕', 'Fossil Finder', '2027-01-04', [
+    ['egg', 'Eggbert', '🥚'], ['bone', 'Bones', '🦴'], ['rock', 'Rocky', '🪨'], ['fern', 'Fernie', '🌿'],
+    ['lizard', 'Lizzy', '🦎'], ['paw', 'Stomp', '🐾'], ['volcano', 'Rumble', '🌋'], ['dodo', 'Doodle', '🦤'],
+    ['feather', 'Plume', '🪶'], ['longneck', 'Longneck', '🦕'], ['rex', 'Rexy', '🦖'], ['mammoth', 'Tusk', '🦣'],
+  ]),
+  monthly(2, 'hearts', 'Hearts', '💖', 'Friendship Star', '2027-02-01', [
+    ['letter', 'Letty', '💌'], ['teddy', 'Teddy', '🧸'], ['rose', 'Rosie', '🌹'], ['balloon', 'Floaty', '🎈'],
+    ['bow', 'Bowie', '🎀'], ['bouquet', 'Posy', '💐'], ['flamingo', 'Flora', '🦩'], ['dove', 'Coo', '🕊️'],
+    ['swan', 'Grace', '🦢'], ['gift', 'Ribbons', '💝'], ['rainbow', 'Rainbow', '🌈'], ['cupid', 'Cupid Jr.', '💘'],
+  ]),
+  monthly(3, 'garden', 'Garden', '🌷', 'Master Gardener', '2027-03-01', [
+    ['tulip', 'Tully', '🌷'], ['bee', 'Buzz', '🐝'], ['caterpillar', 'Inchy', '🐛'], ['daisy', 'Daisy', '🌼'],
+    ['worm', 'Squirm', '🪱'], ['sprout', 'Sprout', '🌱'], ['butterfly', 'Flutter', '🦋'], ['rabbit', 'Hopper', '🐇'],
+    ['strawberry', 'Berry', '🍓'], ['blossom', 'Blossom', '🌸'], ['hibiscus', 'Queen Bloom', '🌺'], ['plant', 'Old Leafy', '🪴'],
+  ]),
+  monthly(4, 'jungle', 'Jungle', '🌴', 'Jungle Guide', '2027-04-05', [
+    ['monkey', 'Cheeky', '🐒'], ['snake', 'Slinky', '🐍'], ['banana', 'Nana', '🍌'], ['sloth', 'Snooze', '🦥'],
+    ['palm', 'Palmer', '🌴'], ['croc', 'Snappy', '🐊'], ['parrot', 'Polly', '🦜'], ['zebra', 'Stripes', '🦓'],
+    ['giraffe', 'Tallulah', '🦒'], ['elephant', 'Trunks', '🐘'], ['tiger', 'Raja', '🐅'], ['orangutan', 'Professor Mango', '🦧'],
+  ]),
+  monthly(5, 'beach', 'Beach', '🏖️', 'Beach Boss', '2027-05-03', [
+    ['coconut', 'Coco', '🥥'], ['kite', 'Flyer', '🪁'], ['shades', 'Shades', '🕶️'], ['umbrella', 'Shady', '⛱️'],
+    ['ball', 'Spike', '🏐'], ['pineapple', 'Pina', '🍍'], ['lobster', 'Clawdia', '🦞'], ['fish', 'Coral', '🐠'],
+    ['boat', 'Skipper', '⛵'], ['island', 'Isla', '🏝️'], ['bigwhale', 'Big Blue', '🐋'], ['sunset', 'Dusk', '🌅'],
+  ]),
+  monthly(6, 'magic', 'Magic', '🏰', 'Grand Wizard', '2027-06-01', [
+    ['candle', 'Wick', '🕯️'], ['key', 'Keymaster', '🗝️'], ['scroll', 'Scrolly', '📜'], ['potion', 'Fizz', '🧪'],
+    ['bubbles', 'Bubbly', '🫧'], ['sparkles', 'Glitter', '✨'], ['wand', 'Sparkle', '🪄'], ['mirror', 'Mira', '🪞'],
+    ['castle', 'Sir Turret', '🏰'], ['orb', 'Oracle', '🔮'], ['star', 'Starla', '🌟'], ['dizzy', 'Dizzy', '💫'],
+  ]),
+);
+
+const localDay = (now) => {
+  const d = new Date(now);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+/** Themes that have appeared by `now` (older themes have no `from`). */
+export function themesOpen(now = Date.now()) {
+  const today = localDay(now);
+  return THEMES.filter((t) => !t.from || t.from <= today);
+}
+/** The next theme still to come, or null. */
+export function nextTheme(now = Date.now()) {
+  const today = localDay(now);
+  return THEMES.filter((t) => t.from && t.from > today).sort((a, b) => (a.from < b.from ? -1 : 1))[0] || null;
+}
+
+// Gold versions: a Super Pack can turn a rare, epic or ultra you own gold
+// (+1 power). They never come from coins or shards.
+export const GOLD_RARITIES = ['rare', 'epic', 'ultra'];
+export const GOLD_BONUS = 1;
+
+// Legendary friends (top tier): only for finishing a set, never from packs.
+//  spelling: every LEGEND_RULES.weekStars Week Stars (a whole week's list mastered)
+//  math: one Table Titan per table 3-12 (every × and ÷ fact of that table mastered)
+//  vocab: every LEGEND_RULES.vocabWords mastered Word Match words
+export const LEGEND_RULES = { weekStars: 4, vocabWords: 25, minWeekWords: 5 };
+const L = (id, name, emoji, power, track, extra = {}) => ({ id: `legend-${id}`, name, emoji, rarity: 'legendary', power, specialty: track, track, ...extra });
+const TITANS = [
+  [3, 'Tri-Horn', '🦏', 'power'], [4, 'Moon Howl', '🐺', 'shield'], [5, 'High Five', '🖐️', 'hint'], [6, 'Dicey', '🎲', 'xp'],
+  [7, 'Lucky Seven', '🐆', 'buddy'], [8, 'Eight Ball', '🎱', 'power'], [9, 'Nine Lives', '🐈‍⬛', 'shield'], [10, 'Perfect Ten', '🔟', 'hint'],
+  [11, 'Zap', '⚡', 'xp'], [12, 'Clockwork', '🕛', 'power'],
+];
+export const LEGENDS = [
+  ...TITANS.map(([t, name, emoji, power]) => L(`titan-${t}`, name, emoji, power, 'math', { table: t })),
+  ...[
+    ['storybook', 'Storybook', '📖', 'hint'], ['pencil', 'Pencil Knight', '✏️', 'power'], ['crayon', 'Crayonia', '🖍️', 'buddy'],
+    ['alpha', 'Alpha', '🔤', 'shield'], ['scribe', 'Scribe', '📝', 'xp'], ['cap', 'Professor Cap', '🎓', 'hint'],
+    ['pen', 'Penny Pen', '🖊️', 'power'], ['stacks', 'Stacks', '📚', 'shield'], ['abc', 'Big ABC', '🔠', 'buddy'],
+    ['chatter', 'Chatter', '💬', 'xp'], ['wordmap', 'Wordmap', '🗺️', 'hint'], ['quill', 'Quill', '✒️', 'power'],
+  ].map(([id, name, emoji, power], i) => L(`spell-${id}`, name, emoji, power, 'spelling', { order: i })),
+  ...[
+    ['brain', 'Big Brain', '🧠', 'xp'], ['clue', 'Detective Clue', '🔍', 'hint'], ['idea', 'Bright Idea', '💡', 'power'],
+    ['speaker', 'Speaker', '🗣️', 'buddy'], ['mic', 'Mic Drop', '🎤', 'shield'], ['globe', 'Globetrotter', '🌍', 'xp'],
+    ['compass', 'Compass', '🧭', 'hint'], ['telescope', 'Stargazer', '🔭', 'power'], ['drama', 'Drama', '🎭', 'buddy'],
+    ['signal', 'Signal', '📡', 'shield'], ['gene', 'Gene', '🧬', 'xp'], ['news', 'Newsy', '📰', 'hint'],
+  ].map(([id, name, emoji, power], i) => L(`vocab-${id}`, name, emoji, power, 'vocab', { order: i })),
+];
+
 export const ALL_ITEMS = THEMES.flatMap((t) => t.items.map((i) => ({ ...i, theme: t.id })));
-export const ITEMS_BY_ID = Object.fromEntries(ALL_ITEMS.map((i) => [i.id, i]));
+export const LEGEND_ITEMS = LEGENDS.map((i) => ({ ...i, theme: 'legend' }));
+export const ITEMS_BY_ID = Object.fromEntries([...ALL_ITEMS, ...LEGEND_ITEMS].map((i) => [i.id, i]));
 
 export const MONSTERS = [
   { name: 'Grumble Blob', emoji: '🟢', hp: 4 },

@@ -2,6 +2,7 @@
 // collection and cosmetics.
 import { newItem, review, isDue, pickNext } from './srs.js';
 import { coinsForAnswer, earnCoins, newPackState, rewardMastery } from './economy.js';
+import { claimLegends } from './legend.js';
 import { XP_PER, applyXpBoost } from './progress.js';
 
 export function newProfile(name, now, id = `kid-${now.toString(36)}`) {
@@ -212,6 +213,12 @@ export function recordAnswer(profile, wordId, result, now, powers = { xp: 0 }) {
       correct: profile.stats.correct + (result === 'correct' ? 1 : 0),
     },
   };
-  if (mastered) next = rewardMastery(next);
-  return { profile: next, coins, xp, mastered };
+  let legends = [];
+  let weekStar = false;
+  if (mastered) {
+    next = rewardMastery(next);
+    const claimed = claimLegends(next);
+    ({ profile: next, newly: legends, star: weekStar } = claimed);
+  }
+  return { profile: next, coins, xp, mastered, legends, weekStar };
 }
