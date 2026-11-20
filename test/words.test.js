@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newProfile, parseWordList, addWords, currentWords, activeItems, recordAnswer, pickPracticeWord, migrateProfile, removeWord, entryWarnings, MAX_REVIEW_PER_ROUND } from '../src/profile.js';
+import { newProfile, parseWordList, addWords, currentWords, activeItems, recordAnswer, pickPracticeWord, migrateProfile, removeWord, entryWarnings, cleanEntries, MAX_REVIEW_PER_ROUND } from '../src/profile.js';
 import { review, MAX_BOX, masteryRating, INTERVALS } from '../src/srs.js';
 import { rewardMastery, openSuperPack, craft, MASTERY_COINS, SUPER_PACK_EVERY, SUPER_PACK_SHARDS, openPack, PACK_COST } from '../src/economy.js';
 import { THEMES, ALL_ITEMS } from '../src/content.js';
@@ -191,4 +191,18 @@ test('voice ranking prefers Premium/Enhanced voices and skips novelty ones', () 
   assert.ok(scoreVoice(voices[1]) < 0);
   assert.equal(bestVoice(voices, voices[0].voiceURI).name, 'Samantha', 'a grown-up choice wins');
   assert.equal(bestVoice(voices, 'gone').name, 'Ava', 'falls back if the chosen voice is gone');
+});
+
+test('entries from the word form are tidied, blanks and repeats dropped', () => {
+  const out = cleanEntries([
+    { word: ' because ', sentence: ' I stayed   in. ' },
+    { word: '', sentence: 'orphan sentence' },
+    { word: 'Because', sentence: '' },
+    { word: 'friend' },
+  ]);
+  assert.deepEqual(out, [
+    { id: 'because', word: 'because', sentence: 'I stayed in.' },
+    { id: 'friend', word: 'friend', sentence: '' },
+  ]);
+  assert.deepEqual(parseWordList('because | I stayed in.\nfriend'), out);
 });

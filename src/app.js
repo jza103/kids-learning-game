@@ -12,8 +12,8 @@ import {
 } from './progress.js';
 import { newBattle, applyAnswer, roundOver, hintText, ROUND_LENGTH } from './battle.js';
 import {
-  newProfile, parseWordList, addWords, removeWord, migrateProfile, currentWords, activeItems, recordAnswer, checkSpelling,
-  pickPracticeWord, entryWarnings,
+  newProfile, addWords, removeWord, migrateProfile, currentWords, activeItems, recordAnswer, checkSpelling,
+  pickPracticeWord, entryWarnings, cleanEntries,
 } from './profile.js';
 import { load, save, requestPersistence, exportBackup, parseBackup } from './storage.js';
 import { sayWord, saySentence, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged, unlockAudio, preloadSpeech, sayBuiltIn } from './speech.js';
@@ -408,13 +408,13 @@ const screens = {
         kid
           ? `<div class="card">
           <h3>Add this week's words for ${esc(kid.name)}</h3>
-          <p class="small muted">One word per line. To add a sentence, put a bar after the word, then the sentence:<br><code>because | I stayed inside because it rained.</code><br>
-            Write just the sentence and use the word exactly as it's spelled. The game says the word before and after the sentence for you. Tap 🔊 below to hear exactly what your kids will hear.<br>
+          <p class="small muted">Type each word, and a sentence if you like. For the sentence, write just the sentence and use the word exactly as it's spelled: the game says the word before and after it for you.
+            Tap 🔊 to hear exactly what your kids will hear.<br>
             New words join ${esc(kid.name)}'s word bank and become this week's practice words. Older words keep their stars and come back now and then for review.
             Adding an old word again puts it back in this week's set.</p>
           <form data-form="words">
-            <textarea name="words" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="friend | My friend lives next door.&#10;because&#10;people" data-live="words"></textarea>
-            <div id="words-check"></div>
+            <div id="entry-rows">${Array.from({ length: ENTRY_ROWS }, (_, i) => entryRowHtml(i)).join('')}</div>
+            <button type="button" class="ghost" data-action="more-rows">+ More words</button>
             <div class="row" style="margin-top:12px"><button type="submit">Add as this week's words</button>
             ${speechAvailable() ? '' : '<span class="muted">Speech is not available in this browser, so words will be shown instead of read aloud.</span>'}</div>
           </form>
@@ -503,6 +503,7 @@ function playPrompt() {
     ${
       g.phase === 'copy'
         ? `<p style="text-align:center;margin-bottom:0">It's spelled:</p><div class="correct-word">${esc(word.word)}</div>
+           ${g.typed ? `<p class="your-try">You wrote <s>${esc(g.typed)}</s></p>` : ''}
            <p class="muted" style="text-align:center">Type it once to lock it in.</p>`
         : ''
     }`;
@@ -624,26 +625,40 @@ async function previewWord(w) {
   return w.sentence ? saySentence(w.word, w.sentence) : sayWord(w.word);
 }
 
-/** Live check of the typed word list: what was understood, tips, and a 🔊 per word. */
-function wordsCheckHtml(text) {
-  const entries = parseWordList(text);
-  if (!entries.length) return '';
-  const rows = entries.map((e, i) => {
-    const warns = entryWarnings(e);
-    return `<tr><td><strong>${esc(e.word)}</strong></td>
-      <td>${e.sentence ? esc(e.sentence) : '<span class="muted">no sentence</span>'}${warns.map((t) => `<div class="warn">⚠️ ${esc(t)}</div>`).join('')}</td>
-      <td><button type="button" class="ghost" data-action="preview-entry" data-i="${i}" aria-label="Hear ${esc(e.word)}">🔊</button></td></tr>`;
-  });
-  const flagged = entries.filter((e) => entryWarnings(e).length).length;
-  return `<p class="small">${entries.length} word${entries.length === 1 ? '' : 's'}${flagged ? ` · ${flagged} to check` : ' · looks good'}</p>
-    <table class="check"><tr><th>Word</th><th>Sentence</th><th></th></tr>${rows.join('')}</table>
-    <p class="small muted preview-status"></p>`;
+const ENTRY_ROWS = 10;
+
+/** One word with an optional sentence, plus a 🔊 and live tips. */
+function entryRowHtml(i) {
+  return `<div class="entry" data-row="${i}">
+      <input type="text" name="word" placeholder="Word ${i + 1}" aria-label="Word ${i + 1}" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="next" data-live="entry">
+      <input type="text" name="sentence" placeholder="Sentence (optional)" aria-label="Sentence for word ${i + 1} (optional)" autocapitalize="sentences" autocomplete="off" enterkeyhint="next" data-live="entry">
+      <button type="button" class="ghost" data-action="preview-entry" data-i="${i}" aria-label="Hear word ${i + 1}">🔊</button>
+      <div class="entry-tips"></div>
+    </div>`;
+}
+
+function rowEntry(row) {
+  return { word: row.querySelector('[name=word]').value, sentence: row.querySelector('[name=sentence]').value };
+}
+
+function typedEntries() {
+  return cleanEntries([...app.querySelectorAll('#entry-rows .entry')].map(rowEntry));
 }
 
 app.addEventListener('input', (e) => {
-  if (e.target.dataset?.live !== 'words') return;
-  const el = document.getElementById('words-check');
-  if (el) el.innerHTML = wordsCheckHtml(e.target.value);
+  if (e.target.dataset?.live !== 'entry') return;
+  const row = e.target.closest('.entry');
+  const entry = rowEntry(row);
+  const tips = entry.word.trim() ? entryWarnings(entry) : [];
+  row.querySelector('.entry-tips').innerHTML = tips.map((t) => `<div class="warn">⚠️ ${esc(t)}</div>`).join('');
+});
+
+// Return in a word box moves on instead of sending the form half-filled.
+app.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.target.dataset?.live !== 'entry') return;
+  e.preventDefault();
+  const inputs = [...app.querySelectorAll('#entry-rows input')];
+  inputs[inputs.indexOf(e.target) + 1]?.focus();
 });
 
 let preparing = false;
@@ -697,7 +712,7 @@ function nextWord() {
   if (review) g.reviewUsed++;
   g.word = p.words.find((w) => w.id === item.id);
   g.recent = [item.id, ...g.recent].slice(0, Math.min(3, Math.max(0, currentWords(p).length - 1)));
-  Object.assign(g, { phase: 'ask', usedHint: false, feedback: review ? '⭐ Review word' : '', feedbackClass: '', zap: '', anim: '' });
+  Object.assign(g, { phase: 'ask', usedHint: false, typed: '', feedback: review ? '⭐ Review word' : '', feedbackClass: '', zap: '', anim: '' });
   g.shownMonster = g.battle.monster;
   g.shownHp = g.battle.hp;
   ui.screen = 'play';
@@ -777,6 +792,7 @@ function submitAnswer(value) {
   } else {
     g.missed.add(g.word.id);
     g.phase = 'copy';
+    g.typed = value.trim();
     g.zap = '';
     g.feedback = events.some((e) => e.type === 'shielded') ? '🛡️ Your shield stopped the monster from healing.' : 'Close! Let\'s learn this one.';
     g.feedbackClass = 'bad';
@@ -836,9 +852,15 @@ const actions = {
     if (w) previewWord(w);
   },
   'preview-entry': (d) => {
-    const ta = app.querySelector('[data-live="words"]');
-    const e = ta && parseWordList(ta.value)[Number(d.i)];
+    const row = app.querySelector(`#entry-rows [data-row="${Number(d.i)}"]`);
+    const e = row && cleanEntries([rowEntry(row)])[0];
     if (e) previewWord(e);
+  },
+  'more-rows': () => {
+    const rows = document.getElementById('entry-rows');
+    const n = rows.children.length;
+    rows.insertAdjacentHTML('beforeend', Array.from({ length: 5 }, (_, i) => entryRowHtml(n + i)).join(''));
+    rows.children[n].querySelector('input').focus();
   },
   'test-voice': () => sayBuiltIn('because', 'I stayed inside because it rained.'),
   'ai-test': async () => {
@@ -974,7 +996,7 @@ app.addEventListener('submit', (e) => {
     prepareAllClips();
   } else if (kind === 'words') {
     const kid = data.profiles[ui.parentKid];
-    const entries = parseWordList(form.words.value);
+    const entries = typedEntries();
     if (!entries.length) return;
     const r = addWords(kid, entries, Date.now());
     update(r.profile);
