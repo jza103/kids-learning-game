@@ -199,11 +199,8 @@ test('requests pay bells (more when the friend who asked is on a crew)', () => {
 
 test('farm XP is capped per day, so levels take days', () => {
   let p = open(kid([]));
-  p.farm = { ...p.farm, items: { carrot: 500 } };
-  for (let i = 0; i < 100; i++) {
-    p.farm.requests[0] = { from: null, wants: { carrot: 1 }, bells: 1 };
-    p = fillRequest(p, 0, T0).profile;
-  }
+  p = { ...p, sunJar: 500 };
+  p = pourSun(p, 300, T0).profile;
   assert.equal(p.farm.xp, FARM_XP_PER_DAY);
   assert.equal(xpLeftToday(p.farm, T0), 0);
   assert.equal(xpLeftToday(p.farm, T0 + DAY), FARM_XP_PER_DAY);

@@ -73,8 +73,11 @@ export function addVocabWord(profile, { word, definition }, now) {
 export function removeVocabWord(profile, id) {
   const v = vocabOf(profile);
   const srs = { ...v.srs };
+  const wasMastered = srs[id]?.masteredAt != null;
   delete srs[id];
-  return { ...profile, vocab: { ...v, words: v.words.filter((w) => w.id !== id), srs } };
+  // Remembered so putting the word back doesn't pay its mastery rewards twice.
+  const masteryPaid = wasMastered ? [...new Set([...(v.masteryPaid || []), id])] : v.masteryPaid;
+  return { ...profile, vocab: { ...v, words: v.words.filter((w) => w.id !== id), srs, masteryPaid } };
 }
 
 /** Put back any starter words that were deleted. */
@@ -151,7 +154,7 @@ export function recordMatch(profile, id, result, now, powers = { xp: 0 }) {
   const paid = earnCoins(profile, coinsForMatch(before, result), now);
   const coins = paid.coins;
   const after = review(before, result, now);
-  const mastered = before.masteredAt == null && after.masteredAt != null;
+  const mastered = before.masteredAt == null && after.masteredAt != null && !(v.masteryPaid || []).includes(id);
   const xp = applyXpBoost(XP_PER[result] + (mastered ? XP_PER.mastered : 0), powers);
   const stats = profile.vocabStats || { answered: 0, correct: 0 };
   let next = {

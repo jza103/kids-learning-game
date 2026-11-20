@@ -237,3 +237,15 @@ test('Smart mix still opens tables when the warm-ups reach their 2 stars', () =>
   const { table } = maybeUnlock(mathState(p), 'mul');
   assert.notEqual(table, null);
 });
+
+test('a warm-up at its star cap rests a month, so Smart mix spends its time on real facts', async () => {
+  const { WARMUP_REST_DAYS, WARMUP_MAX_BOX } = await import('../src/math.js');
+  let p = kid();
+  for (let k = 0; k < 3; k++) p = recordFact(p, 'm1x7', 'correct', { mode: 'speed', now: T0 + k * 1000 }).profile;
+  const item = mathState(p).srs['m1x7'];
+  assert.equal(item.box, WARMUP_MAX_BOX);
+  assert.ok(item.dueAt >= T0 + WARMUP_REST_DAYS * DAY);
+  // A miss still brings it back soon.
+  p = recordFact(p, 'm1x7', 'wrong', { mode: 'speed', now: T0 + DAY }).profile;
+  assert.ok(mathState(p).srs['m1x7'].dueAt < T0 + 2 * DAY);
+});

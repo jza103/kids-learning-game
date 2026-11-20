@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newItem, review, pickNext, weightFor, INTERVALS, MAX_BOX, NOT_DUE_WEIGHT, isMastered, masterySummary } from '../src/srs.js';
+import { newItem, review, pickNext, weightFor, INTERVALS, MAX_BOX, NOT_DUE_WEIGHT, isMastered, masterySummary, STAR_RULES } from '../src/srs.js';
 import { mulberry32 } from '../src/rng.js';
 
 const T0 = Date.UTC(2026, 10, 19, 15);
@@ -111,4 +111,26 @@ test('mastered items need a refresh later; each refresh waits longer; problem it
   const missed = review(item, 'wrong', later);
   assert.equal(missed.box, 0);
   assert.equal(missed.masteredAt, item.masteredAt);
+});
+
+test('optional star rules: one star a day from dailyFrom up, and a miss costing missDrop stars', () => {
+  const saved = { ...STAR_RULES };
+  try {
+    Object.assign(STAR_RULES, { dailyFrom: 2, missDrop: 2 });
+    let item = newItem('cat', T0);
+    let now = T0;
+    for (let i = 0; i < 6; i++) item = review(item, 'correct', (now += 60e3));
+    assert.equal(item.box, 2, 'two stars on the first day');
+    assert.equal(item.correct, 6, 'right answers still count');
+    item = review(item, 'correct', T0 + 86400e3);
+    item = review(item, 'correct', T0 + 86400e3 + 60e3);
+    assert.equal(item.box, 3, 'then one star a day');
+    assert.equal(review(item, 'wrong', T0 + 86400e3 + 120e3).box, 1, 'a miss costs 2 stars');
+    assert.equal(review(newItem('dog', T0), 'correct', T0, { daily: false }).box, 1);
+    let fast = newItem('dog', T0);
+    for (let i = 0; i < 5; i++) fast = review(fast, 'correct', T0 + i, { daily: false });
+    assert.equal(fast.box, MAX_BOX, 'games can opt out (math)');
+  } finally {
+    Object.assign(STAR_RULES, saved);
+  }
 });

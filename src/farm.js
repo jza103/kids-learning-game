@@ -71,7 +71,11 @@ export const GIFT_THANKS = 10; // bells the receiver gets with a gift
 // Farm level is paced by days, not hours: farm XP per day is capped.
 export const FARM_XP_PER_DAY = 100;
 export const XP_PER_LEVEL = 150;
-export const FARM_XP = { harvest: 3, wonder: 10, goody: 1, craft: 5, befriend: 15, request: 10, perItem: 2, sun: 1 };
+// Farm XP comes from Sunshine poured (so from learning), plus one-off firsts
+// (a new critter, a Wonder crop from mastering). Harvests, goodies, forage,
+// crafts and requests give none: one Sunshine grows every plot at once, so
+// per-harvest XP let a kid level up on Morning Rain alone (sim/, 2026-11-20).
+export const FARM_XP = { harvest: 0, wonder: 10, goody: 0, forage: 0, craft: 0, befriend: 15, request: 0, perItem: 0, sun: 1 };
 
 // ---------- State ----------
 export function newFarm(now) {
@@ -543,7 +547,7 @@ export function collectForage(profile, now, rng = Math.random) {
   const found = forageFinds(f, n, rng);
   const events = [];
   for (const [id, k] of Object.entries(found)) addItem(f, id, k);
-  if (n) gainXp(f, n, now, events);
+  if (n) gainXp(f, n * FARM_XP.forage, now, events);
   return { profile: withFarm(profile, f), found, events: [...events, ...stampEvents(f)] };
 }
 
