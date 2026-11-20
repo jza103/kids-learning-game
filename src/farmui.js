@@ -18,6 +18,8 @@ import {
 import { ROUTES_BY_ID } from './farm-content.js';
 import { THEMES } from './content.js';
 
+const PARENT_SUN = [10, 50, 200];
+
 const TABS = [
   ['farm', '🌻', 'Farm'],
   ['crew', '🧑‍🌾', 'Crew'],
@@ -612,6 +614,13 @@ export function initFarm(ctx) {
       act((p) => (d.st ? assignCrew(p, d.id, d.st) : stationOf(p.farm, d.id) ? removeCrew(p, d.id) : p));
       window.scrollTo(0, y);
     },
+    'farm-parent-sun': (d) => {
+      const kid = data().profiles[ui.parentKid];
+      if (!kid) return;
+      update({ ...kid, sunJar: sunJar(kid) + num(d.n) });
+      floatText(`☀️ +${d.n} for ${kid.name}`);
+      render();
+    },
     'farm-roster-filter': (d) => {
       ui.farm.rosterFilter = d.id;
       render();
@@ -676,6 +685,9 @@ export function initFarm(ctx) {
       <h3>🌻 Friend Grove</h3>
       <p class="small muted">A farm side game where friends work, crops grow, critters move in and friends go on expeditions. <strong>Learning powers it:</strong> every correct answer in any game puts ☀️ Sunshine in the Sun Jar (2 for a word that was missed last time, +10 for mastering one; warm-up facts give none), and Sunshine is what grows everything, not the clock. So there's no reason to check in at set times, and nothing is lost while away. There's ${MORNING_RAIN} free Sunshine each morning. When a kid has mastered everything and nothing needs a refresh, the farm grows on its own (Golden Season).
         The farm pays its own Grove Bells and never coins, packs or friends. Mastering gives Wonder Seeds; finishing sets gives Mystery Eggs. Farm XP comes mostly from pouring Sunshine (1 XP each), so farm progress follows learning, and it's capped at ${FARM_XP_PER_DAY} a day. Farm level gates bigger crew areas, new lands and more expedition teams, and each land's routes hold their own treasures, so collecting everything takes weeks, not a weekend. Learning itself is never capped. Each friend also has ⚡ energy and farm know-how: working uses energy and earns know-how, resting friends recover from the same Sunshine (plus a little each morning), so kids rotate friends instead of leaving one crew in place. A tired friend still works at half power; nothing is lost.</p>
+      <div class="row" style="flex-wrap:wrap;margin:8px 0"><span>☀️ Sun Jar: <strong>${sunJar(kid)}</strong></span>
+        ${PARENT_SUN.map((n) => `<button class="small-btn secondary" data-action="farm-parent-sun" data-n="${n}">+${n} ☀️</button>`).join('')}
+        <span class="small muted">For testing and balancing. It goes straight into ${esc(kid.name)}'s jar and doesn't count as learning.</span></div>
       <label class="row"><input type="checkbox" data-action-change="farm-gate" ${kid.farmGate ? 'checked' : ''}> Only open Friend Grove after ${esc(kid.name)} plays a learning game that day</label>
     </div>`;
   }
