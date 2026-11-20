@@ -16,12 +16,13 @@ import {
   pickPracticeWord, entryWarnings, cleanEntries,
 } from './profile.js';
 import { load, save, requestPersistence, exportBackup, parseBackup } from './storage.js';
+import { createVocab, VOCAB_SCREENS } from './vocab-ui.js';
 import { sayWord, saySentence, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged, unlockAudio, preloadSpeech, sayBuiltIn } from './speech.js';
 import { getKey, setKey, listVoicesOrDefaults, prepareClips, countReady, clipSpecs, clipsForWord, sentenceClip, pruneClips, charCount, clearClips, generateClip } from './aivoice.js';
 import { voiceQuality } from './voices.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-19.8';
+const APP_VERSION = '2026-11-20.1';
 const app = document.getElementById('app');
 let data = load();
 for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
@@ -150,6 +151,7 @@ const screens = {
           : `<p class="muted">No words yet. Ask a grown-up to add this week's list.</p>`
       }
       <button class="big" style="width:100%;margin-bottom:16px" data-action="play" ${p.words.length ? '' : 'disabled'}>⚔️ Play</button>
+      ${vocab.hubButton(p)}
       <div class="card">${superProgressHtml(p)}</div>
       <div class="menu">
         <button class="secondary" data-action="go" data-to="packs"><span class="icon">🎁</span>Packs</button>
@@ -435,7 +437,8 @@ const screens = {
           <p class="small muted">Mastery is a 0–${MAX_BOX} star rating. Each correct answer adds a star, with waits that grow from minutes to a week, so a word takes about a week to master. A miss starts it over.
             🔊 plays a word the way the kids hear it. ✕ deletes a word completely (for typos), stars and all. Coins and cards already earned stay.</p>
           <p class="small muted preview-status"></p>
-        </div>`
+        </div>
+        ${vocab.parentHtml(kid)}`
           : ''
       }
       <div class="card small">
@@ -950,6 +953,15 @@ const actions = {
   },
 };
 
+// Word Match (vocabulary) lives in its own module and plugs in here.
+const vocab = createVocab({
+  app, ui, esc, profile, update, go, render, floatText, heroHtml, starsHtml, superProgressHtml,
+  itemEmoji: (id) => ITEMS_BY_ID[id]?.emoji,
+  parentKid: () => data.profiles[ui.parentKid],
+});
+Object.assign(screens, vocab.screens);
+Object.assign(actions, vocab.actions);
+
 app.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');
   if (!el || el.disabled) return;
@@ -1063,7 +1075,7 @@ const cancelHold = () => {
 
 // ---------- render ----------
 function render(opts = {}) {
-  if (['hub', 'play', 'summary', 'packs', 'book', 'locker', 'words'].includes(ui.screen) && !profile()) ui.screen = 'home';
+  if (['hub', 'play', 'summary', 'packs', 'book', 'locker', 'words', ...VOCAB_SCREENS].includes(ui.screen) && !profile()) ui.screen = 'home';
   if (ui.screen === 'play' && app.dataset.screen === 'play') {
     patchPlay(opts);
   } else {

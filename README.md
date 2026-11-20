@@ -1,7 +1,7 @@
 # Kids Learning Game (working title)
 
 **Status:** spelling game live on GitHub Pages; word bank, mastery rewards and voice picker added
-**Created:** 2026-11-17  **Last updated:** 2026-11-19
+**Created:** 2026-11-17  **Last updated:** 2026-11-20
 
 _Moved from the `jza103/ideas` incubator repo on 2026-11-19._
 
@@ -28,6 +28,12 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - **Collectibles have a purpose:** up to 3 on your team give powers (hints, damage, shields, XP boost). Finishing a theme gives a title and XP.
 - **XP / Locker:** cosmetic only (hero, hat, color, title).
 
+## How Word Match (vocabulary) works
+- **Game:** tap a word, then tap what it means. No typing. A round is 3 boards of 4 words, each with one extra meaning so the last match isn't a free guess. Matches hit the same monsters as spelling. New words get a quick "New words!" card first and come in at most 6 per round. Works on iPhone (words in a 2×2 grid above the meanings), iPad and desktop (side by side).
+- **Words:** each kid starts with 44 third-grade starter words (`src/vocab-words.js`, no synonym pairs so boards stay fair). Grown-ups add words with separate Word and Meaning boxes, ✎ edits, ✕ deletes, and "Put back deleted starter words" restores them. Words the parent adds come in before the remaining starter words.
+- **Rewards:** only the first try at each word counts. It gets the same 0–5 stars as spelling (its own list, `profile.vocab`), pays 70% of the spelling coin table (`VOCAB_COIN_SCALE` in `src/vocab.js`), and mastering a word pays the usual mastery coins/XP and counts toward Super Packs. Team powers: 💡 hint takes away a wrong meaning; shield and power work as in spelling.
+- Code: `src/vocab.js` (logic, tested in `test/vocab.test.js`), `src/vocab-ui.js` (screens and grown-ups editor, plugged into `app.js`).
+
 ## Hypothesis / what we're trying to prove
 - Kids will happily practice if the *game* is fun, without needing manipulative monetization.
 - Spaced repetition (adaptive scheduling of missed items) beats flat quizzes for spelling + math facts.
@@ -47,6 +53,7 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 
 ## Where we left off
 - Last done (2026-11-19): went live on GitHub Pages; added the growing word bank with mastery stars, Super Packs and ElevenLabs voice. Then, from Jason's listening: spelling-test context for AI clips, a live check of typed words with tips and a 🔊 preview per word, and ✕ now deletes a word completely (stars and audio). After the first playtest (iPhone): a miss shows the kid's attempt small and struck through under the correct spelling, and the grown-ups form has a word box plus an optional sentence box per word instead of the `|` syntax. Every way of adding words goes through `cleanEntries` in `src/profile.js`; `parseWordList` (pasted lists with `|`) is kept for bulk loading later.
+- 2026-11-20: added Word Match, a tap-to-match vocabulary game with 44 starter words and a Word/Meaning editor on the grown-ups screen.
 - Next:
   1. Jason: listen to the re-made clips; if a word still sounds odd, tune `WORD_CONTEXT`/`VOICE_SETTINGS` in `src/aivoice.js`.
   2. Play with the kids and tune the numbers in `src/economy.js`, `src/profile.js` (review mix) and `src/progress.js`.
