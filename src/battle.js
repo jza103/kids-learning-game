@@ -1,13 +1,17 @@
-// The monster battle that wraps each practice round. No timers and no way to
-// lose: a miss only lets the monster heal a little.
-import { MONSTERS } from './content.js';
+// The mining run that wraps each practice round (Gem Dig, Ore Sorting, Mine
+// Cart Run; see MINE_TARGETS). Each target has hp = how much work it takes.
+// Right answers chip it down, streaks add more, and a miss only slides back 1.
+// No timers and no way to lose. Field names (hp, defeated) are from the old
+// monster battle; the numbers are unchanged.
+import { MINE_TARGETS } from './content.js';
 
 export const ROUND_LENGTH = 10;
 export const COMBO_STEP = 3; // every 3 in a row adds +1 damage
 
-export function newBattle(powers, monsterIndex = 0) {
+export function newBattle(powers, monsterIndex = 0, targets = MINE_TARGETS.spelling) {
   return {
-    ...spawn(monsterIndex),
+    targets,
+    ...spawn(targets, monsterIndex),
     combo: 0,
     hintsLeft: powers.hint,
     shieldsLeft: powers.shield,
@@ -16,8 +20,8 @@ export function newBattle(powers, monsterIndex = 0) {
   };
 }
 
-function spawn(index) {
-  const m = MONSTERS[index % MONSTERS.length];
+function spawn(targets, index) {
+  const m = targets[index % targets.length];
   return { monsterIndex: index, monster: m, hp: m.hp, maxHp: m.hp };
 }
 
@@ -42,7 +46,7 @@ export function applyAnswer(battle, result, powers) {
   events.push({ type: 'hit', damage });
   if (b.hp === 0) {
     events.push({ type: 'defeated', monster: b.monster });
-    Object.assign(b, spawn(b.monsterIndex + 1));
+    Object.assign(b, spawn(b.targets, b.monsterIndex + 1));
     b.defeated++;
   }
   return { battle: b, events };

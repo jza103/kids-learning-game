@@ -1,7 +1,7 @@
 # Kids Learning Game (working title)
 
 **Status:** spelling game and times tables game live on GitHub Pages
-**Created:** 2026-11-17  **Last updated:** 2026-11-21 (sim 2026-11-20)
+**Created:** 2026-11-17  **Last updated:** 2026-11-21 (mining theme 2026-11-20)
 
 _Moved from the `jza103/ideas` incubator repo on 2026-11-19._
 
@@ -21,7 +21,8 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - **Word bank:** each week the parent adds about 10 words (`word | example sentence`). They join a growing bank and become "this week's" words. Older words keep their 0–5 star mastery rating, and due ones come back for review: about 20% of picks, at most 3 per round, more when this week's words are all caught up. Adding an old word again puts it back in this week's set.
 - **Practice:** Leitner boxes 0–5 (`src/srs.js`). Words are read aloud; missed and low-box words are picked more often. A miss costs 2 stars and the kid copies the word once to "lock it in". Mastered = box 5.
 - **Practice over time (2026-11-20, Jason):** the first 2 stars can come in one round; from then on a spelling or Word Match word earns at most one new star a day (the round says "Next ⭐ for this word tomorrow" and the word waits until tomorrow), so a list takes at least 4 days to master and a one-day cram doesn't pay. Times tables are exempt (no cap on math, Jason). `STAR_RULES` in `src/srs.js`. In the year sim, a Saturday-only crammer went from 24 Week Stars to 4 and from really knowing 60% of the words to 87%; a daily player went from about 11–15 Week Stars to 8, with the same Legendaries.
-- **Game:** a 10-word monster battle. Correct answers hit, 3 in a row adds damage, a miss lets the monster heal 1. No timers, no losing.
+- **Game: ⛏️ Gem Dig.** 10 words; each right word is a pickaxe swing that cracks a rock (3 in a row swings harder), and a cracked rock gives a gem (Rose Quartz to Diamond). A miss lets 1 rubble slide back (a shield friend's support beam stops it). No timers, no losing.
+- **Mining theme (2026-11-20, Jason):** the three learning games are different mining activities instead of one monster battle: ⛏️ Gem Dig (spelling), 🪣 Ore Sorting (Word Match: word chunks into meaning crates, filling ore buckets) and 🛒 Mine Cart Run (times tables: the cart races to the next station; time trials are Cart races and the Final mission is the 🚂 Mother Lode Express). Presentation only: `src/battle.js` still runs the rounds with the old numbers (targets of size 4–7, `MINE_TARGETS` in `src/content.js`), so XP, coins and friend powers are unchanged. Look and wording live in `src/mine.js`.
 - **Coins** (`src/economy.js`): only from correct answers, by box before answering (15/12/10/8/5/2), +5 for getting a recently missed word right, half for hinted answers.
 - **Mastery = big rewards:** the first time a word reaches 5 stars, it pays 30 coins and 50 XP, and every 5 mastered words earn a **Super Pack** with a guaranteed **ultra** friend (2 per theme, 10 in all; not craftable, not in normal packs, not limited by the daily cap).
 - **School-year rewards (2026-11-20, Jason picked plan A):** a new 12-friend theme each month through June (`from` dates in `src/content.js`; 12 themes, 144 friends by June). Super Packs give the chosen theme's ultras, then ✨ gold versions (+1 power) of owned rares/epics/ultras, then other ultras, then gold anywhere. 🏆 Legendary friends (34, `LEGENDS`) only come from finished sets: a Table Titan per table 3–12 (all 20 × and ÷ facts mastered), one per 4 Week Stars (a whole week's list of 5+ words mastered; since 2026-11-20 any week's list counts, even when it's finished after the next list arrives), one per 25 mastered Word Match words (`src/legend.js`). Shards never buy ultras, gold or Legendaries. Proposal and pacing math: [Friend rewards for the school year](https://claude.ai/artifact/1YJkrcn1zCmz8qivuDWEmo).
@@ -42,17 +43,17 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 ## How the times tables game works
 - **Facts:** × and ÷ tables 0–12 (169 × facts, 156 ÷ facts, no ÷0). Each fact has its own 0–5 star rating, using the same scheduler as spelling words (`src/math.js`, stored in `profile.math`).
 - **Modes:** Multiply, Divide, and Mixed (advanced). Kids pick "Smart mix" or any single table. Smart mix starts with 0, 1, 2, 10, 5 and opens the next table when 80% of open facts have 2+ stars. At most 5 new facts per round.
-- **Practice vs Speed:** Practice has no timer, pays half coins and XP, and can take a fact only up to 3 stars. Speed gives a time per question (6 s default; the grown-ups screen offers 4–15 s). A right answer in time adds a star; a right answer after the timer still hits the monster but counts like a hinted answer (no star, half coins). So 5 stars means fast recall.
+- **Practice vs Speed:** Practice has no timer, pays half coins and XP, and can take a fact only up to 3 stars. Speed gives a time per question (6 s default; the grown-ups screen offers 4–15 s). A right answer in time adds a star; a right answer after the timer still moves the cart but counts like a hinted answer (no star, half coins). So 5 stars means fast recall.
 - **Warm-ups (2026-11-20):** any fact with a 0, 1 or 2 (5 × 0, 7 × 1, 14 ÷ 2, 12 ÷ 6) is a warm-up: no coins, at most 2 stars (so Smart mix still opens tables), never mastered, half friend XP. A tester ground the 0s for coins. A warm-up at its 2 stars rests for 30 days and Smart mix skips resting warm-ups while there are other facts (`WARMUP_REST_DAYS`); before that, the year sim found 45% of a daily player's math answers went to warm-ups, now 24%, and steady players master all 200 facts instead of about 60%. The facts that count are the 100 × and 100 ÷ facts with both numbers 3–12 (`isWarmup`, `trackedFacts` in `src/math.js`).
 - **Anti-grind:** Repeating a fact before it's due still adds a star (no waiting) but pays only 2 coins. Mastering a fact pays 15 coins once, and every 2 mastered facts fill one Super Pack dot (shared with spelling).
-- **Play:** 12-question monster battle with an on-screen number pad (keyboard digits and Enter work on a computer). A miss shows the right fact big and what the kid typed small and crossed out, then they type the answer once to lock it in. Hint = a skip-counting clue.
+- **Play:** 12-question Mine Cart Run with an on-screen number pad (keyboard digits and Enter work on a computer). A miss shows the right fact big and what the kid typed small and crossed out, then they type the answer once to lock it in. Hint = a skip-counting clue.
 - **Friend hooks:** `mathPowers()` and `afterMathAnswer()` at the top of `src/mathgame.js` are where game-type-aware friend powers plug in.
 - **Time trials:** race every fact of one table (× , ÷ or mixed) against a stopwatch; a miss adds 3 s and must be fixed. Each table keeps a personal best (`profile.math.records`, key like `mul:7`). The 🏁 Final mission takes one random fact from every × table (0–12) and ÷ table (1–12), 25 facts, with its own record. A new best gives 30 XP (cosmetic). Personal bests only, never compared between kids. First tries in a trial count for stars and coins like Speed mode.
 - **Solve times:** every right answer records how long it took; each fact keeps a running average (newest answer weighs 30%, pauses capped at 20 s). "My facts" and the grown-ups screen list the slowest facts.
 - **Kid view:** "My facts" shows color-coded × and ÷ charts. Grown-ups screen shows mastered facts per table, tricky facts and the timer setting.
 
 ## How Word Match (vocabulary) works
-- **Game:** tap a word, then tap what it means. No typing. A round is 3 boards of 4 words, each with one extra meaning so the last match isn't a free guess. Matches hit the same monsters as spelling. New words get a quick "New words!" card first and come in at most 6 per round. Works on iPhone (words in a 2×2 grid above the meanings), iPad and desktop (side by side).
+- **Game:** tap a word, then tap what it means. No typing. A round is 3 boards of 4 words, each with one extra meaning so the last match isn't a free guess. Each match drops a nugget into the ore bucket (same round rules as spelling). New words get a quick "New words!" card first and come in at most 6 per round. Works on iPhone (words in a 2×2 grid above the meanings), iPad and desktop (side by side).
 - **Words:** each kid starts with 44 third-grade starter words (`src/vocab-words.js`, no synonym pairs so boards stay fair). Grown-ups add words with separate Word and Meaning boxes, ✎ edits, ✕ deletes, and "Put back deleted starter words" restores them. Words the parent adds come in before the remaining starter words.
 - **Rewards:** only the first try at each word counts. It gets the same 0–5 stars as spelling (its own list, `profile.vocab`), pays 70% of the spelling coin table (`VOCAB_COIN_SCALE` in `src/vocab.js`), and mastering a word pays the usual mastery coins/XP and counts toward Super Packs. Team powers: 💡 hint takes away a wrong meaning; shield and power work as in spelling.
 - Code: `src/vocab.js` (logic, tested in `test/vocab.test.js`), `src/vocab-ui.js` (screens and grown-ups editor, plugged into `app.js`).
@@ -93,7 +94,8 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - **Randomized rewards: decided (2026-11-19)** after Jason tested Blooket with the kids: collectibles with rarity via packs, kept mild. Odds shown, pity guarantees, duplicates → shards, daily cap, kid picks a theme, collectibles give in-game powers and fill a collection book, coins only from correct answers (missed words pay more, mastered less), parent writes the content. Background in `appeal-analysis.md`.
 
 ## Where we left off
-- Last done (2026-11-20): from the year sim, Jason switched on one star a day (spelling, Word Match) with softer misses, and the Grove is paced over the school year (calendar lands, rising level cost, daily market limit, fewer trip shards).
+- Last done (2026-11-20): mining theme (Jason): Gem Dig, Ore Sorting and Mine Cart Run replace the monster battle in all three games. Scoring unchanged. Checked at phone, iPad and desktop sizes in a headless browser; not yet tried by the kids.
+- Before that (2026-11-20): from the year sim, Jason switched on one star a day (spelling, Word Match) with softer misses, and the Grove is paced over the school year (calendar lands, rising level cost, daily market limit, fewer trip shards).
 - Before that (2026-11-20): school-year simulator (`sim/`) and the clear fixes it found: farm XP only from Sunshine, warm-ups rest a month, Week Stars for any finished list, no double mastery pay.
 - Before that (2026-11-21): Workshop shows sell prices and profit, "Sell for 🔔" on the spot, and a shelf to sell crafts (crafting never cost Bells; Build still does). Before that, Pour button gains "Pour N, finishes the next thing" next to Pour all. Before that, Friend Grove round 4: Friends roster tab, friend energy and farm ranks (rotation), and a grown-ups button to add Sunshine (+10/+50/+200) for testing.
 - Before that (2026-11-21): Friend Grove round 3: bought crew-area expansions, routes and treasures per land, farm XP from Sunshine, pour-time speed and the pour warning.
@@ -121,10 +123,11 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 
 ## Key files
 - `index.html`, `styles.css`, `src/app.js` — the app UI
+- `src/mine.js` — mining look for the three games (arena, wording)
 - `src/srs.js`, `src/economy.js`, `src/progress.js`, `src/battle.js`, `src/profile.js` — game and learning logic (pure, tested in `test/`)
 - `src/math.js`, `src/mathgame.js` — times tables logic (tested in `test/math.test.js`) and UI
 - `src/farm.js`, `src/farm-content.js`, `src/farmui.js` — Friend Grove farm side game
-- `src/content.js` — collectibles (with specialty), monsters, cosmetics
+- `src/content.js` — collectibles (with specialty), mining targets, cosmetics
 - `src/games.js`, `src/friends.js`, `src/friendsui.js` — game types, friend growth logic, shared friend UI snippets
 - `src/voices.js`, `src/speech.js`, `src/aivoice.js` — built-in voice ranking, speech playback, ElevenLabs audio
 - `docs/voice-options.md` — AI voice options for a decision
