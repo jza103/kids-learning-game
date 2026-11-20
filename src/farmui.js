@@ -164,12 +164,14 @@ export function initFarm(ctx) {
     const f = p.farm;
     const ready = f.plots.some((pl) => plotReady(pl));
     const speed = stationSpeed(p, 'fields');
+    const fieldEls = crewElements(f, 'fields');
     const plots = f.plots.map((pl, i) => {
       if (!pl) return `<button class="plot empty" data-action="farm-plot" data-i="${i}">➕<div class="small">Plant</div></button>`;
       const c = g(pl.crop);
-      if (plotReady(pl)) return `<button class="plot ready" data-action="farm-harvest">${c.emoji}<div class="small">Ready!</div></button>`;
+      const bonus = c.kind !== 'wonder' && fieldEls.has(c.element) ? '<span class="plot-bonus" title="Harvest bonus">+1</span>' : '';
+      if (plotReady(pl)) return `<button class="plot ready" data-action="farm-harvest">${bonus}${c.emoji}<div class="small">Ready!</div></button>`;
       const pct = Math.min(100, (100 * pl.grown) / Math.max(1e-9, pl.need));
-      return `<button class="plot growing" data-action="farm-plot" data-i="${i}">🌱<div class="small">${c.emoji} ☀️${sunLeft(pl, speed)}</div><div class="grow"><div style="width:${pct}%"></div></div></button>`;
+      return `<button class="plot growing" data-action="farm-plot" data-i="${i}">${bonus}🌱<div class="small">${c.emoji} ☀️${sunLeft(pl, speed)}</div><div class="grow"><div style="width:${pct}%"></div></div></button>`;
     }).join('');
     let picker = '';
     if (ui.farm.plantAt != null) {
@@ -189,23 +191,25 @@ export function initFarm(ctx) {
     return `<div class="card"><div class="row spread"><h3>🌱 Fields</h3>${ready ? '<button data-action="farm-harvest">Harvest all</button>' : ''}</div>
       <div class="plots">${plots}</div>${picker}
       ${crewLine(p, 'fields')}
-      <p class="small muted">A friend with the crop's element on the Fields crew adds +1 to each harvest. Growers make every crop grow faster, even ones planted before they joined.</p></div>`;
+      <p class="small muted">A friend with the crop's element on the Fields crew adds +1 to its harvest (the green +1 badge). Every friend on the crew makes all crops grow faster, Growers most of all, even crops planted before they joined.</p></div>`;
   }
 
   function pensHtml(p, now) {
     const f = p.farm;
     const owned = ownedCritters(f);
+    const penEls = crewElements(f, 'pens');
     const waiting = owned.reduce((s, id) => s + goodyCycles(p, id) * critter(id).makes.length, 0);
     return `<div class="card"><div class="row spread"><h3>🐾 Pens (${owned.length}/${f.pens})</h3>${waiting ? `<button data-action="farm-goodies">Collect goodies (${waiting}+)</button>` : ''}</div>
       ${owned.length ? `<div class="critters">${owned.map((id) => {
         const c = critter(id);
         const n = goodyCycles(p, id);
-        return `<div class="critter"><span class="bob">${c.emoji}</span><div class="small">${esc(c.name)}</div><div class="small muted">${n ? c.makes.map((m) => g(m).emoji).join('') + ' ×' + n : '…'}</div></div>`;
+        const dbl = penEls.has(c.element) ? '<span class="plot-bonus" title="Goodies doubled">×2</span>' : '';
+        return `<div class="critter">${dbl}<span class="bob">${c.emoji}</span><div class="small">${esc(c.name)}</div><div class="small muted">${n ? c.makes.map((m) => g(m).emoji).join('') + ' ×' + n : '…'}</div></div>`;
       }).join('')}</div>` : '<p class="muted">No critters yet. Befriend a visitor with its favorite crop!</p>'}
       ${f.waiting.map((id) => `<div class="row" style="margin-top:8px"><span class="big-emoji">${critter(id).emoji}</span> ${esc(critter(id).name)} is waiting for a pen. <button data-action="farm-welcome" data-id="${id}" ${penSpace(f) > 0 ? '' : 'disabled'}>Welcome home</button></div>`).join('')}
       ${f.eggs ? `<div class="row" style="margin-top:8px"><button class="super" data-action="farm-hatch">🥚 Hatch a Mystery Egg (${f.eggs})</button></div>` : ''}
       ${crewLine(p, 'pens')}
-      <p class="small muted">Critters make a goody for every ${GOODY_SUN} ☀️ (up to 4 waiting each). A Tender with the critter's element doubles it. Two critters that get along sometimes have a baby.</p></div>`;
+      <p class="small muted">Critters make a goody for every ${GOODY_SUN} ☀️ (up to 4 waiting each). A friend with the critter's element on the Pens crew doubles it (the green ×2 badge). Two critters that get along sometimes have a baby.</p></div>`;
   }
 
   function forageHtml(p, now) {

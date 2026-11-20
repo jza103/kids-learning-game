@@ -548,3 +548,12 @@ test('the workshop earns Bells: crafts are worth more than their materials and c
   assert.equal(r.profile.farm.bells, bells + 40);
   assert.equal(r.profile.farm.items.bread || 0, 0);
 });
+
+test('a friend added after planting still gives the element harvest bonus', () => {
+  const water = first5.find((i) => farmTrait(i.id).element === 'water').id;
+  let p = open(kid([water]));
+  p = plant(p, 0, 'strawberry', T0);
+  p = assignCrew(p, water, 'fields');
+  p = shine(p, 10);
+  assert.deepEqual(harvestAll(p, T0).harvested, [{ id: 'strawberry', n: 3 }]);
+});
