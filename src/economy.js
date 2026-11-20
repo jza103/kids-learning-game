@@ -20,7 +20,7 @@ export function coinsForAnswer(itemBefore, result) {
 
 // --- Packs ---
 export const PACK_COST = 60;
-export const DAILY_PACK_CAP = 3;
+export const DAILY_PACK_CAP = 5;
 export const ODDS = { common: 0.65, rare: 0.28, epic: 0.07 };
 // A rare-or-better is guaranteed at least once every RARE_PITY packs, and an
 // epic at least once every EPIC_PITY packs.
