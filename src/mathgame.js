@@ -168,7 +168,7 @@ export function initMath(ctx) {
       return `<h1>Round done! 🎉</h1>
         <div class="card">
           <div class="row" style="font-size:1.3rem;gap:24px">
-            <span>🪙 +${game.earned.coins}</span><span>⭐ +${game.earned.xp} XP</span><span>👾 ${game.battle.defeated} defeated</span>
+            <span>🪙 +${game.earned.coins}</span><span>⭐ +${game.earned.xp} XP</span>${game.earned.sun ? `<span>☀️ +${game.earned.sun}</span>` : ''}<span>👾 ${game.battle.defeated} defeated</span>
           </div>
           <p>${game.right} of ${game.battle.asked} right${game.mode === 'speed' ? ` · ${game.fast} in time` : ''}.</p>
           ${mastered.length ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((f) => `${esc(f.text)} = ${f.answer}`).join(', ')}!</strong> +${FACT_MASTERY_COINS * mastered.length} 🪙</p>` : ''}
@@ -227,7 +227,7 @@ export function initMath(ctx) {
               ? `<p style="text-align:center;font-size:1.2rem"><strong>${r.prevBest ? `${formatSeconds(r.prevBest - r.ms)} faster than your old best (${formatTime(r.prevBest)})!` : 'Your first time. Now try to beat it!'}</strong> +${TRIAL_RECORD_XP} XP</p>`
               : `<p style="text-align:center">Your best is <strong>${formatTime(r.prevBest)}</strong>. ${formatSeconds(r.ms - r.prevBest)} to go!</p>`
           }
-          <div class="row" style="justify-content:center;gap:24px"><span>🪙 +${t.earned.coins}</span><span>⭐ +${t.earned.xp + r.xp} XP</span></div>
+          <div class="row" style="justify-content:center;gap:24px"><span>🪙 +${t.earned.coins}</span><span>⭐ +${t.earned.xp + r.xp} XP</span>${t.earned.sun ? `<span>☀️ +${t.earned.sun}</span>` : ''}</div>
         </div>
         ${friendSummaryHtml(t.friendsBefore, profile(), t.friendEvents)}
         ${
@@ -299,7 +299,7 @@ export function initMath(ctx) {
       misses: 0,
       fix: false,
       times: [],
-      earned: { coins: 0, xp: 0 },
+      earned: { coins: 0, xp: 0, sun: 0 },
       powers: mathPowers(p),
       friendsBefore: p,
       friendEvents: [],
@@ -332,6 +332,7 @@ export function initMath(ctx) {
       t.friendEvents.push(...grown.events);
       update(grown.profile);
       t.earned.coins += rec.coins + (rec.mastered ? FACT_MASTERY_COINS : 0);
+      t.earned.sun += rec.sun || 0;
       t.earned.xp += rec.xp;
       if (right) t.times.push({ fact: f, ms });
       if (rec.mastered) floatText(`🌟 ${f.text} mastered!`);
@@ -378,7 +379,7 @@ export function initMath(ctx) {
       unlocked: [],
       right: 0,
       fast: 0,
-      earned: { coins: 0, xp: 0 },
+      earned: { coins: 0, xp: 0, sun: 0 },
       startLevel: levelForXp(p.xp),
       friendsBefore: p,
       friendEvents: [],
@@ -488,6 +489,7 @@ export function initMath(ctx) {
     game.friendEvents.push(...grown.events);
     let p = grown.profile;
     game.earned.coins += rec.coins;
+    game.earned.sun += rec.sun || 0;
     game.earned.xp += rec.xp;
 
     // In practice there's no clock, so a right answer is always a full hit.

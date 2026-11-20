@@ -25,7 +25,7 @@ function kid(friends = [], extra = {}) {
 }
 const open = (p, now = T0, seed = 1) => ({ ...visitFarm(p, now, mulberry32(seed)).profile, sunJar: 0 });
 /** Pour n Sunshine into the farm. */
-const shine = (p, n) => pourSun({ ...p, sunJar: n }).profile;
+const shine = (p, n) => pourSun({ ...p, sunJar: n }, n).profile;
 
 test('every friend has a farm trait, and the first 60 cover every job and element', () => {
   for (const i of [...ALL_ITEMS, ...LEGEND_ITEMS]) assert.ok(farmTrait(i.id), i.id);
@@ -309,9 +309,13 @@ test('Morning Rain once a day; the Sun Jar pours into the farm clock', () => {
   assert.equal(r.profile.sunJar, MORNING_RAIN, 'not twice in a day');
   r = visitFarm(r.profile, T0 + DAY, mulberry32(1));
   assert.equal(r.profile.sunJar, MORNING_RAIN * 2);
-  const p = pourSun(r.profile).profile;
+  assert.throws(() => pourSun(r.profile), /plant something/);
+  let p = plant(r.profile, 0, 'carrot', T0);
+  p = pourSun(p).profile;
+  assert.equal(p.sunJar, MORNING_RAIN * 2 - 3, 'only what the carrot needs');
+  assert.equal(p.farm.clock, 3);
+  p = pourSun(p, 100).profile;
   assert.equal(p.sunJar, 0);
-  assert.equal(p.farm.clock, MORNING_RAIN * 2);
   assert.throws(() => pourSun(p), /empty/);
 });
 

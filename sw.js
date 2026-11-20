@@ -1,7 +1,7 @@
 // Offline support: precache the app shell, then serve from cache and refresh
 // the cache in the background (stale-while-revalidate), so updates show up on
 // the next launch. Bump VERSION when adding or removing files.
-const VERSION = 'v18';
+const VERSION = 'v19';
 const CACHE = `spelling-${VERSION}`;
 const SHELL = [
   './',
@@ -37,6 +37,7 @@ const SHELL = [
   './src/farm.js',
   './src/farm-content.js',
   './src/farmui.js',
+  './src/sunshine.js',
 ];
 
 self.addEventListener('install', (event) => {

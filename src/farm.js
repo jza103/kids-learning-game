@@ -693,12 +693,29 @@ export function eggCount(profile) {
  * Pour the Sun Jar into the farm: the farm clock moves forward by that much,
  * so every crop, critter, forage trip, craft and expedition grows at once.
  */
-export function pourSun(profile, amount = sunJar(profile)) {
-  const n = Math.min(sunJar(profile), Math.max(0, Math.floor(amount)));
-  if (!n) throw new Error('the Sun Jar is empty');
+export function pourSun(profile, amount = null) {
+  if (!sunJar(profile)) throw new Error('the Sun Jar is empty');
+  const useful = sunUseful(profile);
+  if (amount == null && !useful) throw new Error('plant something or send an expedition first, so the Sunshine has something to grow');
+  const n = Math.min(sunJar(profile), Math.max(0, Math.ceil((amount ?? useful) - 1e-9)));
+  if (!n) throw new Error('nothing to pour');
   const f = clone(farmOf(profile));
   f.clock += n;
   return { profile: { ...withFarm(profile, f), sunJar: sunJar(profile) - n }, poured: n };
+}
+
+/**
+ * The most Sunshine that still does something right now: finishing what's
+ * growing, filling critters' goodies and the forage basket. Pouring stops
+ * there, so Sunshine is never wasted.
+ */
+export function sunUseful(profile) {
+  const f = farmOf(profile);
+  let need = sunToFinish(profile);
+  const pens = stationSpeed(profile, 'pens');
+  for (const c of Object.values(f.critters)) need = Math.max(need, (GOODY_SUN * GOODY_MAX_CYCLES) / pens - (f.clock - c.at));
+  if (stationPower(profile, 'forage') > 0) need = Math.max(need, FORAGE_MAX_SUN - (f.clock - f.forageClock));
+  return Math.max(0, Math.ceil(need - 1e-9));
 }
 
 /** Sunshine still needed before everything now growing is done (0 if nothing). */

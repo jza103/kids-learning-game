@@ -333,3 +333,15 @@ button.pick-friend.selected { border-color: var(--good); }
 .jentry { text-align: center; padding: 6px; border-radius: 12px; background: #f7f5ff; }
 .jentry.unknown { opacity: .5; }
 td.nowrap { white-space: nowrap; }
+
+.sun-card { display: block; border-color: #f5c542; background: linear-gradient(135deg, #fffbe6, #fff3c4); }
+.sun-card.golden { border-color: #e2b007; background: linear-gradient(135deg, #fff2b3, #ffe08a); }
+.sun-jar { font-size: 1.6rem; }
+button.sun-btn { background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff; }
+.need { display: inline-block; background: #f1efff; border-radius: 999px; padding: 2px 10px; margin: 2px; }
+.need.met { background: #d9f7d0; }
+.route.done { opacity: .6; }
+.trip.back { border-color: var(--good); }
+.story p { font-size: 1.1rem; }
+.wish-card { border-color: #a78bfa; background: linear-gradient(135deg, #f5f0ff, #eef6ff); }
+.collectible .trait { margin-top: 4px; }

@@ -5,8 +5,10 @@ import { masterySummary, masteryRating, MAX_BOX } from './srs.js';
 import {
   BOX_COINS, COMEBACK_BONUS, PACK_COSTS, packCost, coinPaceNote, COIN_PACE, DAILY_COIN_MAX, DAILY_PACK_CAP, ODDS, CRAFT_COST, SHARDS_FOR_DUPLICATE,
   RARE_PITY, EPIC_PITY, canOpenPack, openPack, craft, packsLeftToday, pityStatus, themeProgress,
-  MASTERY_COINS, SUPER_PACK_EVERY, openSuperPack,
+  MASTERY_COINS, SUPER_PACK_EVERY, openSuperPack, WISH_SHARDS, WISH_RARITIES, wishCoinCost, canWish, makeWish, wishPool,
 } from './economy.js';
+import { farmTrait, JOBS, ELEMENTS } from './farm-content.js';
+import { REFRESH_SHARDS } from './sunshine.js';
 import {
   XP_PER, TEAM_SIZE, levelProgress, levelForXp, unlockedCosmetics, applyXpBoost,
   claimSetRewards, earnedTitles,
@@ -29,7 +31,7 @@ import { initMath } from './mathgame.js';
 import { initFarm } from './farmui.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-21.1';
+const APP_VERSION = '2026-11-21.2';
 const app = document.getElementById('app');
 let data = load();
 // claimLegends also catches sets finished before Legendaries existed.
@@ -112,8 +114,38 @@ function collectibleCard(item, { owned = true, extra = '', cls = '' } = {}) {
     <div><strong>${owned ? esc(item.name) : '???'}</strong></div>
     <div class="rarity ${item.rarity}">${gold ? '✨ gold ' : ''}${item.rarity}</div>
     ${owned ? friendDetailsHtml(profile(), item.id) : `<div class="small muted">${spec.emoji} ${spec.name} friend</div>`}
+    ${traitHtml(item.id)}
     ${extra}
   </div>`;
+}
+
+function traitHtml(id) {
+  const t = farmTrait(id);
+  return t ? `<div class="trait">${JOBS[t.job].emoji} ${JOBS[t.job].name} · ${ELEMENTS[t.element].emoji} ${ELEMENTS[t.element].name}</div>` : '';
+}
+
+const WISH_ATTRS = [
+  ...Object.values(ELEMENTS).map((e) => ({ kind: 'element', value: e.id, label: `${e.emoji} ${e.name}` })),
+  ...Object.values(JOBS).map((j) => ({ kind: 'job', value: j.id, label: `${j.emoji} ${j.name}` })),
+];
+
+function wishHtml(p, now) {
+  const attr = WISH_ATTRS.find((a) => `${a.kind}:${a.value}` === ui.wishAttr) || WISH_ATTRS[0];
+  const left = wishPool(p, attr, now).length;
+  const coins = canWish(p, attr, 'coins', now);
+  const reason = { cap: 'No packs left today.', coins: `You need ${wishCoinCost(p, now)} coins.`, none: 'You have every one of those already!' };
+  return `<div class="card wish-card"><h3>🌠 Wishing Well</h3>
+    <p class="small">Need a certain kind of friend for Friend Grove? Pick an element or a job and wish. You'll get a friend you don't have yet with it. Ultras and Legendaries never come from wishes.</p>
+    <div class="row"><select data-action-change="wish-attr" aria-label="Wish for">${WISH_ATTRS.map((a) => `<option value="${a.kind}:${a.value}" ${a === attr ? 'selected' : ''}>${a.label}</option>`).join('')}</select>
+      <span class="small muted">${left} you don't have yet</span></div>
+    <div class="row" style="margin-top:12px">
+      <button data-action="wish" data-pay="coins" ${coins.ok ? '' : 'disabled'}>Wish · 🪙 ${wishCoinCost(p, now)}</button>
+      ${WISH_RARITIES.map((r) => {
+        const ok = canWish(p, attr, 'shards', now, r).ok;
+        return `<button class="secondary" data-action="wish" data-pay="shards" data-rarity="${r}" ${ok ? '' : 'disabled'}><span class="rarity ${r}">${r}</span> · 💎 ${WISH_SHARDS[r]}</button>`;
+      }).join('')}
+    </div>
+    <p class="small muted">${coins.ok ? '' : reason[coins.reason] + ' '}A coin wish rolls rarity like a pack and uses one of today's packs. A shard wish lets you pick the rarity.</p></div>`;
 }
 
 function starsHtml(item) {
@@ -261,7 +293,7 @@ const screens = {
     return `<h1>Round done! 🎉</h1>
       <div class="card">
         <div class="row" style="font-size:1.3rem;gap:24px">
-          <span>🪙 +${g.earned.coins}</span><span>⭐ +${g.earned.xp} XP</span><span>👾 ${g.battle.defeated} defeated</span>
+          <span>🪙 +${g.earned.coins}</span><span>⭐ +${g.earned.xp} XP</span>${g.earned.sun ? `<span>☀️ +${g.earned.sun}</span>` : ''}<span>👾 ${g.battle.defeated} defeated</span>
         </div>
         ${
           mastered.length
@@ -302,7 +334,9 @@ const screens = {
           : r
           ? `<div class="reveal"><div class="flip">${collectibleCard(r.item, {
               cls: r.super ? 'ultra-glow' : '',
-              extra: r.gold
+              extra: r.wish
+                ? '<p><strong>🌠 Your wish came true!</strong></p>'
+                : r.gold
                 ? `<p><strong>✨ Gold version!</strong><br>Gold friends get +${GOLD_BONUS} power.</p>`
                 : r.duplicate
                 ? `<p><strong>You already have this one!</strong><br>+${r.shards} 💎 shards</p>`
@@ -317,6 +351,7 @@ const screens = {
              <button class="big super" data-action="open-super">Open ${theme.emoji} Super Pack</button></div>`
           : `<div class="card">${superProgressHtml(p)}<p class="small muted">Ultra friends only come from Super Packs. Master ${SUPER_PACK_EVERY} words to earn one.</p></div>`
       }
+      ${wishHtml(p, now)}
       <div class="card">
         <h3>Pick a theme</h3>
         <div class="grid">
@@ -537,6 +572,7 @@ const screens = {
           .map(([k, v]) => `${k} ${Math.round(v * 100)}%`)
           .join(', ')}. A rare or better is guaranteed every ${RARE_PITY} packs and an epic every ${EPIC_PITY}.
           Missing friends always come before duplicates, duplicates become shards, and shards can make any missing friend except ultras.
+          Shards also come from refreshing a mastered word or fact (${REFRESH_SHARDS} each) and from Friend Grove expeditions. The 🌠 Wishing Well (on the Packs screen) gives a missing friend with an element or job the kid picks, for coins (uses one of the day's packs) or shards; never an ultra or Legendary.
           Nothing in the app costs money.</p>
         <p><strong>The big rewards come from mastering words.</strong> The first time a word reaches ${MAX_BOX} stars it pays ${MASTERY_COINS} coins and ${XP_PER.mastered} XP,
           and every ${SUPER_PACK_EVERY} mastered words earn a Super Pack: an ultra friend, or once a theme's ultras are owned, a ✨ gold version (+${GOLD_BONUS} power) of a rare, epic or ultra friend (not limited by the daily cap). Ultras and gold versions can't be bought with coins or shards.</p>
@@ -785,7 +821,7 @@ async function startRound() {
     missed: new Set(),
     mastered: [],
     reviewUsed: 0,
-    earned: { coins: 0, xp: 0 },
+    earned: { coins: 0, xp: 0, sun: 0 },
     startLevel: levelForXp(p.xp),
   };
   nextWord();
@@ -850,6 +886,7 @@ function submitAnswer(value) {
   let p = grown.profile;
   g.friendEvents.push(...grown.events);
   g.earned.coins += rec.coins;
+  g.earned.sun += rec.sun || 0;
   g.earned.xp += rec.xp;
 
   const { battle, events } = applyAnswer(g.battle, result, g.powers);
@@ -1054,6 +1091,20 @@ const actions = {
     render();
     if (newly.length) floatText(`🏅 ${newly[0].reward}! +${XP_PER.setComplete} XP`);
   },
+  wish: (d) => {
+    const attr = WISH_ATTRS.find((a) => `${a.kind}:${a.value}` === ui.wishAttr) || WISH_ATTRS[0];
+    try {
+      const { profile: p1, result } = makeWish(profile(), attr, d.pay, Date.now(), Math.random, d.rarity || null);
+      const { profile: p2, newly } = claimSetRewards(p1);
+      update(p2);
+      ui.reveal = result;
+      render();
+      window.scrollTo(0, 0);
+      if (newly.length) floatText(`🏅 ${newly[0].reward}! +${XP_PER.setComplete} XP`);
+    } catch {
+      render();
+    }
+  },
   craft: (d) => {
     const item = ITEMS_BY_ID[d.id];
     if (!confirm(`Use ${CRAFT_COST[item.rarity]} shards to make ${item.name}?`)) return;
@@ -1165,6 +1216,11 @@ app.addEventListener('submit', (e) => {
 app.addEventListener('change', async (e) => {
   const kind = e.target.dataset.actionChange;
   if (farm.onChange(kind, e, () => data.profiles[ui.parentKid])) return;
+  if (kind === 'wish-attr') {
+    ui.wishAttr = e.target.value;
+    render();
+    return;
+  }
   if (kind === 'voice' || kind === 'rate') {
     if (kind === 'voice') data.settings.voiceURI = e.target.value || null;
     else data.settings.rate = Number(e.target.value);
