@@ -10,7 +10,7 @@ import {
   ownedCritters, penSpace, goodyCycles, collectGoodies, befriendCost, befriend, waveBye, hatchEgg, forageWaiting, collectForage,
   startCraft, canCraft, collectCraft, fillRequest, skipRequest, requestPay, sell, plotCost, nextPenCost, buyPlot, buyPen,
   biomeBlock, biomeCost, openBiome, decorCost, buyDecor, journalProgress, perkUsesLeft, usePerk, canGift, sendGift, farmLocked,
-  FERTILIZER_SHARDS, GIFT_MAX, FARM_XP_PER_DAY, sunLeft, sunJar, pourSun, sunToFinish, sunUseful, goldenSeason, MORNING_RAIN, GOODY_SUN,
+  FERTILIZER_SHARDS, GIFT_MAX, FARM_XP_PER_DAY, sunLeft, sunJar, pourSun, sunToFinish, sunUseful, sunToNext, goldenSeason, MORNING_RAIN, GOODY_SUN,
   FORAGE_PER_POWER_SUN, expeditionSlots, biomeOpen, benchFriends, needsMet, fitsNeed, sendExpedition, collectExpedition, welcomeExplorer,
   EXPEDITION_SUN, TEAM_SIZE_FOR, EXPEDITION_SHARDS, NEED_SPEED, handOf, friendRank, jobStamps, allRounder, isTired, whereIs, RANKS, ENERGY_MAX,
   ENERGY_REST, MORNING_ENERGY, TRIP_ENERGY, JOB_STAMP_SUN, expeditionSpeed, nextExpansion, expandCrew, pourTips, routeExplorer, MAX_SLOTS,
@@ -382,13 +382,18 @@ export function initFarm(ctx) {
     const toFinish = sunToFinish(p);
     const useful = sunUseful(p);
     const tips = jar && useful ? pourTips(p) : [];
+    const next = sunToNext(p);
+    const nextName = next && (next.kind === 'trip' ? `${ROUTES_BY_ID[next.id].emoji} trip` : `${g(next.id).emoji} ${esc(g(next.id).name)}`);
+    const nextBtn = next && jar && next.n < Math.min(jar, useful)
+      ? `<button class="sun-btn" data-action="farm-pour" data-n="${next.n}" ${jar >= next.n ? '' : 'disabled'}>Pour ☀️ ${next.n}<div class="small">finishes ${nextName}</div></button>` : '';
     const warn = ui.farm.pourWarn && tips.length ? `<div class="picker"><p><strong>Wait! Before you pour:</strong></p><ul>${tips.map((t) => `<li>${esc(t.text)}</li>`).join('')}</ul>
       <div class="row"><button class="secondary" data-action="farm-pour-go">Pour anyway</button><button class="ghost" data-action="farm-pour-cancel">Not yet</button></div></div>` : '';
     return `<div class="card sun-card ${golden ? 'golden' : ''}">
       <div class="row spread">
         <div><div class="sun-jar">☀️ <strong>${jar}</strong> <span class="small">Sunshine in your jar</span></div>
-          <div class="small muted">${golden ? '🌟 Golden Season: you\'ve mastered everything, so the farm grows on its own!' : 'Every right answer in a learning game adds Sunshine. Sunshine grows everything here.'}${toFinish ? ` Everything growing needs ☀️ ${toFinish} more.` : ''}${jar && !useful ? ' Plant something or send an expedition, then pour.' : ''} Pouring only uses what's needed; the rest stays in the jar.</div></div>
-        <button class="sun-btn" data-action="farm-pour" ${jar && useful ? '' : 'disabled'}>Pour ☀️ ${Math.min(jar, useful)}</button>
+          <div class="small muted">${golden ? '🌟 Golden Season: you\'ve mastered everything, so the farm grows on its own!' : 'Every right answer in a learning game adds Sunshine. Sunshine grows everything here.'}${toFinish ? ` Everything growing needs ☀️ ${toFinish} more.` : ''}${jar && !useful ? ' Plant something or send an expedition, then pour.' : ''} Pour a little to finish the next thing, or pour all: pouring never uses more than what's needed, and the rest stays in the jar.</div></div>
+        <div class="pour-btns">${nextBtn}
+          <button class="sun-btn ${nextBtn ? 'secondary' : ''}" data-action="farm-pour" ${jar && useful ? '' : 'disabled'}>Pour ${nextBtn ? 'all ' : ''}☀️ ${Math.min(jar, useful)}</button></div>
       </div>${warn}</div>`;
   }
 
@@ -499,7 +504,8 @@ export function initFarm(ctx) {
       ui.farm.news = v.events.map(eventText).filter(Boolean).slice(0, 4);
       go('farm');
     },
-    'farm-pour': () => {
+    'farm-pour': (d) => {
+      ui.farm.pourN = d.n ? num(d.n) : null;
       if (pourTips(profile()).length && !ui.farm.pourWarn) {
         ui.farm.pourWarn = true;
         return render();
@@ -508,7 +514,9 @@ export function initFarm(ctx) {
     },
     'farm-pour-go': () => {
       ui.farm.pourWarn = false;
-      const r = act((p) => pourSun(p));
+      const n = ui.farm.pourN;
+      ui.farm.pourN = null;
+      const r = act((p) => pourSun(p, n));
       if (r?.poured) floatText(`☀️ ${r.poured} Sunshine!`);
     },
     'farm-pour-cancel': () => {

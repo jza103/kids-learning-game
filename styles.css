@@ -359,3 +359,6 @@ button.sun-btn { background: linear-gradient(135deg, #f59e0b, #f97316); color: #
 .roster-moves .small-btn { min-width: 0; width: 100%; padding: 8px 0; }
 .roster-moves > span { grid-column: 1 / -1; }
 @media (min-width: 700px) { .roster-row { grid-template-columns: auto minmax(0, 1fr) auto; } .roster-moves { grid-column: auto; width: 300px; } }
+.pour-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.pour-btns .sun-btn .small { font-weight: 400; }
+button.sun-btn.secondary { background: #fff; color: #b45309; border: 2px solid #f59e0b; }

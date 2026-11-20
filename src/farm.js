@@ -847,6 +847,22 @@ export function sunUseful(profile) {
   return Math.max(0, Math.ceil(need - 1e-9));
 }
 
+/**
+ * The least Sunshine that finishes something: the next crop, craft or
+ * expedition. Returns { n, kind, id } or null when nothing is growing.
+ */
+export function sunToNext(profile) {
+  const f = farmOf(profile);
+  const fields = stationSpeed(profile, 'fields');
+  const options = [
+    ...f.plots.map((pl) => pl && { n: sunLeft(pl, fields), kind: 'crop', id: pl.crop }),
+    f.workshop && { n: sunLeft(f.workshop, stationSpeed(profile, 'workshop')), kind: 'craft', id: f.workshop.recipe },
+    ...f.expeditions.map((e) => ({ n: sunLeft(e, expeditionSpeed(e)), kind: 'trip', id: e.route })),
+  ].filter((x) => x && x.n > 0);
+  if (!options.length) return null;
+  return options.reduce((a, b) => (b.n < a.n ? b : a));
+}
+
 /** Sunshine still needed before everything now growing is done (0 if nothing). */
 export function sunToFinish(profile) {
   const f = farmOf(profile);
