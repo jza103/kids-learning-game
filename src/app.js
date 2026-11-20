@@ -23,8 +23,10 @@ import {
 import { TRICKY_SETS, trickyState, setTricky, autoTricky, addTrickySet, readyForMore, setsLeft, trickySetEntries, WEEK_MS, READY_STARS } from './tricky.js';
 import { load, save, requestPersistence, exportBackup, parseBackup } from './storage.js';
 import { createVocab, VOCAB_SCREENS } from './vocab-ui.js';
+import { createWordLists } from './wordlists-ui.js';
+import { vocabOf } from './vocab.js';
 import { sayWord, saySentence, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged, unlockAudio, preloadSpeech, sayBuiltIn } from './speech.js';
-import { getKey, setKey, listVoicesOrDefaults, prepareClips, countReady, clipSpecs, clipsForWord, sentenceClip, pruneClips, charCount, clearClips, generateClip } from './aivoice.js';
+import { getKey, setKey, listVoicesOrDefaults, prepareClips, countReady, clipSpecs, clipsForWord, clipsForVocab, sentenceClip, pruneClips, charCount, clearClips, generateClip } from './aivoice.js';
 import { voiceQuality } from './voices.js';
 import { teamPowersFor, friendsAfterAnswer } from './friends.js';
 import { friendDetailsHtml, teamLineHtml, friendSummaryHtml, friendsHelpHtml } from './friendsui.js';
@@ -33,23 +35,27 @@ import { initMath } from './mathgame.js';
 import { initFarm } from './farmui.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-21.10';
+const APP_VERSION = '2026-11-21.11';
 const app = document.getElementById('app');
 let data = load();
 // claimLegends also catches sets finished before Legendaries existed.
 for (const id of Object.keys(data.profiles)) data.profiles[id] = claimLegends(migrateProfile(data.profiles[id])).profile;
 data.settings = { voiceURI: null, rate: 0.85, ...(data.settings || {}) };
-data.settings.ai = { enabled: false, voiceId: null, voiceName: null, ...(data.settings.ai || {}) };
+data.settings.ai = { enabled: false, voiceId: null, voiceName: null, listVoices: [], ...(data.settings.ai || {}) };
 applySpeech();
 
 /** Use the ElevenLabs voice only when it's switched on and a key is saved. */
 function applySpeech() {
   const ai = data.settings.ai;
-  setSpeechPrefs({ ...data.settings, aiVoiceId: ai.enabled && ai.voiceId && getKey() ? ai.voiceId : null });
+  setSpeechPrefs({ ...data.settings, aiVoiceId: ai.enabled && ai.voiceId && getKey() ? ai.voiceId : null, listVoiceIds: (ai.listVoices || []).map((v) => v.id) });
 }
 
+/** Every clip the kids' words need: spelling words and Word Match words. */
 function allClipSpecs() {
-  return clipSpecs(Object.values(data.profiles));
+  const profiles = Object.values(data.profiles);
+  const m = new Map(clipSpecs(profiles).map((c) => [c.id, c]));
+  for (const p of profiles) for (const w of vocabOf(p).words) for (const c of clipsForVocab(w)) m.set(c.id, c);
+  return [...m.values()];
 }
 const ui = { screen: 'home', game: null, reveal: null, packTheme: null, parentKid: null, flash: '', hubNote: '' };
 
@@ -534,7 +540,8 @@ const screens = {
           <p class="small muted">Type each word, and a sentence if you like. For the sentence, write just the sentence and use the word exactly as it's spelled: the game says the word before and after it for you.
             Tap 🔊 to hear exactly what your kids will hear.<br>
             New words join ${esc(kid.name)}'s word bank and become this week's practice words. Older words keep their stars and come back now and then for review.
-            Adding an old word again puts it back in this week's set.</p>
+            Adding an old word again puts it back in this week's set.<br>
+            Or pick a ready-made list, or load a teacher's list, in 📚 Word lists further down.</p>
           <form data-form="words">
             <div id="entry-rows">${Array.from({ length: ENTRY_ROWS }, (_, i) => entryRowHtml(i)).join('')}</div>
             <button type="button" class="ghost" data-action="more-rows">+ More words</button>
@@ -567,6 +574,7 @@ const screens = {
         ${vocab.parentHtml(kid)}`
           : ''
       }
+      ${wordlists.parentHtml(kid)}
       <div class="card small">
         <h3>How rewards work</h3>
         <p>Nuggets only come from correct answers, never from finishing a round. A word pays by how well it's known:
@@ -789,7 +797,7 @@ async function prepareAllClips() {
   if (preparing || !ai.enabled || !ai.voiceId || !key) return;
   preparing = true;
   try {
-    await pruneClips(allClipSpecs()).catch(() => {});
+    await pruneClips([...allClipSpecs(), ...wordlists.librarySpecs()]).catch(() => {});
     const res = await prepareClips(key, ai.voiceId, allClipSpecs(), (done, total) => setAiStatus(`Getting audio… ${done} of ${total}`));
     if (res.error) setAiStatus(res.error);
     else refreshAiStatus();
@@ -1167,6 +1175,23 @@ const vocab = createVocab({
 });
 Object.assign(screens, vocab.screens);
 Object.assign(actions, vocab.actions);
+// Word lists library on the grown-ups screen (src/wordlists-ui.js).
+const wordlists = createWordLists({
+  app, ui, esc, update, render,
+  data: () => data,
+  save: () => save(data),
+  parentKid: () => data.profiles[ui.parentKid],
+  mainVoice: () => ({ voiceId: data.settings.ai.voiceId, voiceName: data.settings.ai.voiceName, key: getKey() }),
+  listVoices: () => data.settings.ai.listVoices || [],
+  addListVoice: (v) => {
+    const ai = data.settings.ai;
+    ai.listVoices = [v, ...(ai.listVoices || []).filter((x) => x.id !== v.id)];
+    save(data);
+    applySpeech();
+  },
+  afterWordsAdded: () => setTimeout(prepareAllClips, 0),
+});
+Object.assign(actions, wordlists.actions);
 // Times tables game: its own screens and actions (src/mathgame.js).
 const math = initMath({ ui, profile, update, go, render, esc, heroHtml, topbar, floatText, superProgressHtml, data: () => data });
 Object.assign(screens, math.screens);
@@ -1186,6 +1211,7 @@ app.addEventListener('submit', (e) => {
   e.preventDefault();
   const form = e.target;
   const kind = form.dataset.form;
+  if (wordlists.onSubmit(kind, form)) return;
   if (kind === 'answer') {
     submitAnswer(form.querySelector('input').value);
   } else if (kind === 'add-kid') {
@@ -1226,6 +1252,7 @@ app.addEventListener('submit', (e) => {
 app.addEventListener('change', async (e) => {
   const kind = e.target.dataset.actionChange;
   if (farm.onChange(kind, e, () => data.profiles[ui.parentKid])) return;
+  if (wordlists.onChange(kind, e)) return;
   if (kind === 'wish-attr') {
     ui.wishAttr = e.target.value;
     render();
@@ -1279,7 +1306,7 @@ app.addEventListener('change', async (e) => {
     data = restored;
     for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
     data.settings = { voiceURI: null, rate: 0.85, ...(data.settings || {}) };
-    data.settings.ai = { enabled: false, voiceId: null, voiceName: null, ...(data.settings.ai || {}) };
+    data.settings.ai = { enabled: false, voiceId: null, voiceName: null, listVoices: [], ...(data.settings.ai || {}) };
     applySpeech();
     save(data);
     ui.flash = 'Backup restored.';
@@ -1316,7 +1343,10 @@ function render(opts = {}) {
     app.dataset.screen = ui.screen;
   }
   if (ui.screen === 'play') document.getElementById('answer')?.focus();
-  if (ui.screen === 'parent') refreshAiPanel();
+  if (ui.screen === 'parent') {
+    refreshAiPanel();
+    wordlists.refreshVoiceCounts();
+  }
 }
 
 applyLook(profile());

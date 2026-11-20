@@ -424,6 +424,18 @@ button.sun-btn.secondary { background: #fff; color: #b45309; border: 2px solid #
 button.plot, .critter { position: relative; }
 .plot-bonus { position: absolute; top: 4px; right: 4px; font-size: .7rem; font-weight: 700; background: #22c55e; color: #fff; border-radius: 999px; padding: 1px 6px; }
 
+/* Word lists library (grown-ups) */
+#wordlists details { border-top: 1px solid var(--line); padding: 8px 0; }
+#wordlists summary { cursor: pointer; padding: 4px 0; }
+.wl-row { padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.wl-row:last-of-type { border-bottom: 0; }
+.wl-buttons { margin-top: 6px; gap: 6px; }
+.wl-buttons button, .wl-group-actions button { font-size: .9rem; }
+.wl-words p { margin: 6px 0; }
+.wl-load { display: grid; gap: 8px; }
+.wl-load textarea { width: 100%; min-width: 0; font-size: 16px; box-sizing: border-box; }
+.wl-load input[type=text] { font-size: 16px; }
+.wl-preview { margin-top: 10px; padding: 10px; border: 2px dashed var(--line); border-radius: 12px; }
 /* Grown-ups: give resources */
 .grant-list { display: grid; gap: 4px; }
 .grant-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; padding: 4px 0; border-bottom: 1px solid var(--line); }
