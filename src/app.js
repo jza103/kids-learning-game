@@ -19,9 +19,10 @@ import { load, save, requestPersistence, exportBackup, parseBackup } from './sto
 import { sayWord, saySentence, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged, unlockAudio, preloadSpeech, sayBuiltIn } from './speech.js';
 import { getKey, setKey, listVoicesOrDefaults, prepareClips, countReady, clipSpecs, clipsForWord, sentenceClip, pruneClips, charCount, clearClips, generateClip } from './aivoice.js';
 import { voiceQuality } from './voices.js';
+import { initMath } from './mathgame.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-19.7';
+const APP_VERSION = '2026-11-20.1';
 const app = document.getElementById('app');
 let data = load();
 for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
@@ -149,7 +150,10 @@ const screens = {
           ? `<p class="muted">This week: ${week.length} words · ${weekSum.mastered} mastered · ${p.masteredWords || 0} mastered all time</p>`
           : `<p class="muted">No words yet. Ask a grown-up to add this week's list.</p>`
       }
-      <button class="big" style="width:100%;margin-bottom:16px" data-action="play" ${p.words.length ? '' : 'disabled'}>⚔️ Play</button>
+      <div class="game-pick">
+        <button class="big" data-action="play" ${p.words.length ? '' : 'disabled'}>⚔️ Spelling</button>
+        <button class="big" data-action="go" data-to="math">🔢 Times tables</button>
+      </div>
       <div class="card">${superProgressHtml(p)}</div>
       <div class="menu">
         <button class="secondary" data-action="go" data-to="packs"><span class="icon">🎁</span>Packs</button>
@@ -399,6 +403,7 @@ const screens = {
         }
         ${aiVoiceHtml()}
       </div>
+      ${math.parentHtml(kid)}
       ${
         kid
           ? `<div class="card">
@@ -928,6 +933,11 @@ const actions = {
   },
 };
 
+// Times tables game: its own screens and actions (src/mathgame.js).
+const math = initMath({ ui, profile, update, go, render, esc, heroHtml, topbar, floatText, superProgressHtml, data: () => data });
+Object.assign(screens, math.screens);
+Object.assign(actions, math.actions);
+
 app.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');
   if (!el || el.disabled) return;
@@ -1041,7 +1051,7 @@ const cancelHold = () => {
 
 // ---------- render ----------
 function render(opts = {}) {
-  if (['hub', 'play', 'summary', 'packs', 'book', 'locker', 'words'].includes(ui.screen) && !profile()) ui.screen = 'home';
+  if (['hub', 'play', 'summary', 'packs', 'book', 'locker', 'words', 'math', 'math-play', 'math-summary', 'math-facts'].includes(ui.screen) && !profile()) ui.screen = 'home';
   if (ui.screen === 'play' && app.dataset.screen === 'play') {
     patchPlay(opts);
   } else {
@@ -1057,6 +1067,6 @@ ui.screen = profile() ? 'hub' : 'home';
 render();
 requestPersistence();
 // A new version was installed: reload now, or after the round if one is in progress.
-window.__klgUpdate = () => (ui.screen === 'play' ? (ui.pendingReload = true) : location.reload());
+window.__klgUpdate = () => (ui.screen === 'play' || math.isPlaying() ? (ui.pendingReload = true) : location.reload());
 // Voices load late on some browsers; refresh the grown-ups screen when they arrive.
 onVoicesChanged(() => ui.screen === 'parent' && render());
