@@ -183,11 +183,7 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
 
   let after;
   let coins;
-  if (srsResult === 'correct' && !due) {
-    // Asked again before it was due: no new star, small pay.
-    after = { ...before, seen: before.seen + 1, correct: before.correct + 1, lastResult: 'correct' };
-    coins = NOT_DUE_COINS;
-  } else if (srsResult === 'correct' && warmup && before.box >= WARMUP_MAX_BOX) {
+  if (srsResult === 'correct' && warmup && before.box >= WARMUP_MAX_BOX) {
     // Warm-ups stop at WARMUP_MAX_BOX stars.
     after = { ...before, seen: before.seen + 1, correct: before.correct + 1, lastResult: 'correct', dueAt: now + INTERVALS[before.box] };
     coins = 0;
@@ -196,8 +192,11 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
     after = { ...before, seen: before.seen + 1, correct: before.correct + 1, lastResult: 'correct', dueAt: now + INTERVALS[before.box] };
     coins = coinsForAnswer(before, 'correct');
   } else {
+    // Every in-time right answer adds a star, even before the fact is due:
+    // a kid who aces the facts in one week has earned it (Jason, 2026-11-20).
+    // Repeating a fact early still pays little, so coins can't be ground.
     after = review(before, srsResult, now);
-    coins = coinsForAnswer(before, srsResult);
+    coins = srsResult === 'correct' && !due ? NOT_DUE_COINS : coinsForAnswer(before, srsResult);
   }
   if (warmup) {
     coins = 0;

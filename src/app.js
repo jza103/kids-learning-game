@@ -94,8 +94,8 @@ function collectibleCard(item, { owned = true, extra = '', cls = '' } = {}) {
 }
 
 function starsHtml(item) {
-  const { stars, label } = masteryRating(item);
-  return `<span class="stars" title="${label}">${'★'.repeat(stars)}<span class="off">${'★'.repeat(MAX_BOX - stars)}</span></span>`;
+  const { stars, label, refresh } = masteryRating(item);
+  return `<span class="stars" title="${label}">${'★'.repeat(stars)}<span class="off">${'★'.repeat(MAX_BOX - stars)}</span>${refresh ? ' 🔄' : ''}</span>`;
 }
 
 function superProgressHtml(p) {

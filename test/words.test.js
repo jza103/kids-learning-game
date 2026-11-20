@@ -66,11 +66,13 @@ test('word entry tips catch sentences that will read badly', () => {
 
 test('mastery rating follows the box', () => {
   let p = addWords(newProfile('A', T0), parseWordList('cat'), T0).profile;
-  assert.deepEqual(masteryRating(p.srs.cat), { stars: 0, label: 'New' });
+  assert.deepEqual(masteryRating(p.srs.cat, T0), { stars: 0, label: 'New', refresh: false });
   p = recordAnswer(p, 'cat', 'correct', T0).profile;
-  assert.deepEqual(masteryRating(p.srs.cat), { stars: 1, label: 'Learning' });
-  p = masterWord(p, 'cat', p.srs.cat.dueAt).profile;
-  assert.equal(masteryRating(p.srs.cat).label, 'Mastered');
+  assert.deepEqual(masteryRating(p.srs.cat, T0), { stars: 1, label: 'Learning', refresh: false });
+  const m = masterWord(p, 'cat', p.srs.cat.dueAt);
+  p = m.profile;
+  assert.equal(masteryRating(p.srs.cat, m.now - 1).label, 'Mastered');
+  assert.deepEqual(masteryRating(p.srs.cat, m.now), { stars: MAX_BOX - 1, label: 'Needs a refresh', refresh: true });
 });
 
 test('mastering a word pays coins, XP and Super Pack progress exactly once', () => {
