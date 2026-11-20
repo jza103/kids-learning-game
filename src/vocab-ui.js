@@ -140,21 +140,22 @@ export function createVocab(ctx) {
         ? ['Match!', 'Yes!', 'You got it!', 'Nice one!'][Math.floor(Math.random() * 4)]
         : `That's it: ${word.word}.`;
       s.feedbackClass = 'good';
+      if (rec?.shards && !defeated) s.feedback = `✨ Polished back to shiny! +${rec.shards} 💎`;
       if (rec?.mastered) {
         s.mastered.push(wordId);
         s.earned.coins += MASTERY_COINS;
-        s.feedback = `🌟 You mastered “${word.word}”! +${MASTERY_COINS} 🪙`;
+        s.feedback = `🌟 You mastered “${word.word}”! +${MASTERY_COINS} 🟡`;
       }
       if (b.matched.length === b.words.length) {
         s.phase = 'cleared';
         ctx.render();
-        if (rec?.coins) ctx.floatText(`+${rec.coins} 🪙`);
+        if (rec?.coins) ctx.floatText(`+${rec.coins} 🟡`);
         const here = s;
         setTimeout(() => ui.vocab === here && ui.screen === 'vocab' && nextBoard(), rec?.mastered ? 2200 : 1300);
         return;
       }
       ctx.render();
-      if (rec?.coins) ctx.floatText(`+${rec.coins} 🪙`);
+      if (rec?.coins) ctx.floatText(`+${rec.coins} 🟡`);
     } else {
       if (firstTry) s.missed.add(wordId);
       b.wrong = { wordId, defId };
@@ -172,7 +173,7 @@ export function createVocab(ctx) {
     return `<div class="topbar">
         <button class="secondary" data-action="vocab-end">Done</button>
         <span class="pill">Board ${s.boardNo} of ${BOARDS_PER_ROUND}</span>
-        <span class="pill">🪙 ${p.coins}</span>
+        <span class="pill">🟡 ${p.coins}</span>
       </div>
       ${arenaHtml('vocab', { hero: ctx.heroHtml(p), combo: b.combo, zap: s.zap, anim: s.anim, target: s.shownMonster, hp: s.shownHp, from: s.from })}`;
   }
@@ -255,9 +256,9 @@ export function createVocab(ctx) {
       return `<h1>Sorting done! 🪣</h1>
         <div class="card">
           <div class="row" style="font-size:1.3rem;gap:24px">
-            <span>🪙 +${s.earned.coins}</span><span>⭐ +${s.earned.xp} XP</span>${s.earned.sun ? `<span>☀️ +${s.earned.sun}</span>` : ''}<span>🎯 ${s.earned.firstTry}/${s.battle.asked} first try</span><span>${ACTIVITIES.vocab.count(s.battle.defeated)}</span>
+            <span>🟡 +${s.earned.coins}</span><span>⭐ +${s.earned.xp} XP</span>${s.earned.sun ? `<span>☀️ +${s.earned.sun}</span>` : ''}<span>🎯 ${s.earned.firstTry}/${s.battle.asked} first try</span><span>${ACTIVITIES.vocab.count(s.battle.defeated)}</span>
           </div>
-          ${mastered.length ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((w) => `“${esc(w.word)}”`).join(', ')}!</strong> +${MASTERY_COINS * mastered.length} 🪙</p>` : ''}
+          ${mastered.length ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((w) => `“${esc(w.word)}”`).join(', ')}!</strong> +${MASTERY_COINS * mastered.length} 🟡</p>` : ''}
           ${ctx.superProgressHtml(p)}
           ${coinPaceNote(p, Date.now()) ? `<p class="small muted">${coinPaceNote(p, Date.now())}</p>` : ''}
           ${s.levelUp ? `<p style="font-size:1.3rem"><strong>Level up! You're level ${levelForXp(p.xp)}.</strong> Check the Locker for new stuff.</p>` : ''}
@@ -267,7 +268,7 @@ export function createVocab(ctx) {
           missed.length
             ? `<div class="card"><h3>Words to keep learning</h3>
                ${missed.map((w) => `<p><strong>${esc(w.word)}</strong>: ${esc(w.definition)}</p>`).join('')}
-               <p class="small muted">These come back more often, and pay extra coins when you match them.</p></div>`
+               <p class="small muted">These come back more often, and pay extra nuggets when you match them.</p></div>`
             : ''
         }
         <div class="row">
@@ -347,7 +348,7 @@ export function createVocab(ctx) {
     'vocab-remove': (d) => {
       const kid = ctx.parentKid();
       const w = kid && vocabOf(kid).words.find((x) => x.id === d.id);
-      if (!w || !confirm(`Delete “${w.word}” from ${kid.name}'s Word Match words? Its stars are erased. Coins and friends already earned stay.`)) return;
+      if (!w || !confirm(`Delete “${w.word}” from ${kid.name}'s Word Match words? Its stars are erased. Nuggets and friends already earned stay.`)) return;
       ctx.update(removeVocabWord(kid, d.id));
       ctx.render();
     },
@@ -440,7 +441,7 @@ export function createVocab(ctx) {
           : `<button class="secondary" data-action="vocab-toggle-list">Show all ${v.words.length} words</button>`
       }
       <div class="row" style="margin-top:8px"><button class="ghost" data-action="vocab-restore">Put back deleted starter words</button></div>
-      <p class="small muted">Coins: a first-try match pays ${Math.round(VOCAB_COIN_SCALE * 100)}% of what a spelled word pays (shaky words pay more, mastered words less). A board has ${BOARD_SIZE} words plus one extra meaning, so the last match isn't a free guess.</p>
+      <p class="small muted">Nuggets: a first-try match pays ${Math.round(VOCAB_COIN_SCALE * 100)}% of what a spelled word pays (shaky words pay more, mastered words less). A board has ${BOARD_SIZE} words plus one extra meaning, so the last match isn't a free guess.</p>
     </div>`;
   }
 

@@ -195,6 +195,13 @@ export const RECIPES = [
   craft('kite', 'Sky Kite', '🪁', 'cloud', { silk: 2, cloudpuff: 2 }, 12, 125),
   craft('pie', 'Peach Pie', '🥧', 'cloud', { peach: 2, puffcorn: 2, honey: 1 }, 9, 120),
   craft('musicbox', 'Music Box', '🎶', 'cloud', { note: 2, pearl: 1, coconut: 1 }, 12, 140),
+  // Gem polishing (mining theme, Jason 2026-11-20): rough stones from
+  // expeditions polished in the Workshop and sold for Bells.
+  craft('agate', 'Polished Agate', '🧿', 'meadow', { pebble: 2 }, 6, 55),
+  craft('icering', 'Ice Gem Ring', '💍', 'frost', { bluegem: 2 }, 8, 75),
+  craft('amberpendant', 'Amber Pendant', '📿', 'caves', { amber: 2 }, 8, 85),
+  craft('geodeglobe', 'Polished Geode', '🔮', 'caves', { geode: 1, moonstone: 1 }, 10, 110),
+  craft('prismcrown', 'Prism Crown', '👑', 'cloud', { prism: 2 }, 10, 95),
 ];
 
 export const GOODS = [...CROPS, ...WONDER_CROPS, ...FORAGE, ...GOODIES, ...RECIPES]; // + expedition treasures, below

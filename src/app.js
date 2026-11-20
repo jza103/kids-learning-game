@@ -14,6 +14,7 @@ import {
   claimSetRewards, earnedTitles,
 } from './progress.js';
 import { newBattle, applyAnswer, roundOver, hintText, ROUND_LENGTH } from './battle.js';
+import { grant, grantHtml, grantName } from './grant.js';
 import { ACTIVITIES, activityLabel, arenaHtml, zapText, clearedText, missText, animFor, targetsFor, randomStart } from './mine.js';
 import {
   newProfile, addWords, removeWord, migrateProfile, currentWords, activeItems, recordAnswer, checkSpelling,
@@ -32,7 +33,7 @@ import { initMath } from './mathgame.js';
 import { initFarm } from './farmui.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-21.9';
+const APP_VERSION = '2026-11-21.10';
 const app = document.getElementById('app');
 let data = load();
 // claimLegends also catches sets finished before Legendaries existed.
@@ -103,7 +104,7 @@ function topbar(title) {
   return `<div class="topbar">
     <button class="secondary" data-action="go" data-to="hub">← Back</button>
     <h2 style="margin:0">${esc(title)}</h2>
-    <div class="row"><span class="pill">🪙 ${p.coins}</span><span class="pill">💎 ${p.shards}</span></div>
+    <div class="row"><span class="pill">🟡 ${p.coins}</span><span class="pill">💎 ${p.shards}</span></div>
   </div>`;
 }
 
@@ -134,24 +135,24 @@ function wishHtml(p, now) {
   const attr = WISH_ATTRS.find((a) => `${a.kind}:${a.value}` === ui.wishAttr) || WISH_ATTRS[0];
   const left = wishPool(p, attr, now).length;
   const coins = canWish(p, attr, 'coins', now);
-  const reason = { cap: 'No packs left today.', coins: `You need ${wishCoinCost(p, now)} coins.`, none: 'You have every one of those already!' };
+  const reason = { cap: 'No packs left today.', coins: `You need ${wishCoinCost(p, now)} nuggets.`, none: 'You have every one of those already!' };
   return `<div class="card wish-card"><h3>🌠 Wishing Well</h3>
     <p class="small">Need a certain kind of friend for Friend Grove? Pick an element or a job and wish. You'll get a friend you don't have yet with it. Ultras and Legendaries never come from wishes.</p>
     <div class="row"><select data-action-change="wish-attr" aria-label="Wish for">${WISH_ATTRS.map((a) => `<option value="${a.kind}:${a.value}" ${a === attr ? 'selected' : ''}>${a.label}</option>`).join('')}</select>
       <span class="small muted">${left} you don't have yet</span></div>
     <div class="row" style="margin-top:12px">
-      <button data-action="wish" data-pay="coins" ${coins.ok ? '' : 'disabled'}>Wish · 🪙 ${wishCoinCost(p, now)}</button>
+      <button data-action="wish" data-pay="coins" ${coins.ok ? '' : 'disabled'}>Wish · 🟡 ${wishCoinCost(p, now)}</button>
       ${WISH_RARITIES.map((r) => {
         const ok = canWish(p, attr, 'shards', now, r).ok;
         return `<button class="secondary" data-action="wish" data-pay="shards" data-rarity="${r}" ${ok ? '' : 'disabled'}><span class="rarity ${r}">${r}</span> · 💎 ${WISH_SHARDS[r]}</button>`;
       }).join('')}
     </div>
-    <p class="small muted">${coins.ok ? '' : reason[coins.reason] + ' '}A coin wish rolls rarity like a pack and uses one of today's packs. A shard wish lets you pick the rarity.</p></div>`;
+    <p class="small muted">${coins.ok ? '' : reason[coins.reason] + ' '}A nugget wish rolls rarity like a pack and uses one of today's packs. A gem dust wish lets you pick the rarity.</p></div>`;
 }
 
 function starsHtml(item) {
   const { stars, label, refresh } = masteryRating(item);
-  return `<span class="stars" title="${label}">${'★'.repeat(stars)}<span class="off">${'★'.repeat(MAX_BOX - stars)}</span>${refresh ? ' 🔄' : ''}</span>`;
+  return `<span class="stars" title="${label}">${'★'.repeat(stars)}<span class="off">${'★'.repeat(MAX_BOX - stars)}</span>${refresh ? ' 🧽' : ''}</span>`;
 }
 
 function legendNewsHtml(p) {
@@ -236,7 +237,7 @@ const screens = {
     const weekSum = masterySummary(week.map((w) => p.srs[w.id]).filter(Boolean));
     return `<div class="topbar">
         <button class="ghost" data-action="go" data-to="home">Switch player</button>
-        <div class="row"><span class="pill">🪙 ${p.coins}</span><span class="pill">💎 ${p.shards}</span></div>
+        <div class="row"><span class="pill">🟡 ${p.coins}</span><span class="pill">💎 ${p.shards}</span></div>
       </div>
       <div class="card hub-head">
         ${heroHtml(p)}
@@ -294,11 +295,11 @@ const screens = {
     return `<h1>Round done! 🎉</h1>
       <div class="card">
         <div class="row" style="font-size:1.3rem;gap:24px">
-          <span>🪙 +${g.earned.coins}</span><span>⭐ +${g.earned.xp} XP</span>${g.earned.sun ? `<span>☀️ +${g.earned.sun}</span>` : ''}<span>${ACTIVITIES.spelling.count(g.battle.defeated)}</span>
+          <span>🟡 +${g.earned.coins}</span><span>⭐ +${g.earned.xp} XP</span>${g.earned.sun ? `<span>☀️ +${g.earned.sun}</span>` : ''}<span>${ACTIVITIES.spelling.count(g.battle.defeated)}</span>
         </div>
         ${
           mastered.length
-            ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((w) => `“${esc(w)}”`).join(', ')}!</strong> +${MASTERY_COINS * mastered.length} 🪙</p>`
+            ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((w) => `“${esc(w)}”`).join(', ')}!</strong> +${MASTERY_COINS * mastered.length} 🟡</p>`
             : ''
         }
         ${superProgressHtml(p)}
@@ -308,7 +309,7 @@ const screens = {
       ${
         missed.length
           ? `<div class="card"><h3>Words to keep practicing</h3><p style="font-size:1.4rem">${missed.map(esc).join(' · ')}</p>
-             <p class="small muted">These will come back more often, and pay extra coins when you get them right.</p></div>`
+             <p class="small muted">These will come back more often, and pay extra nuggets when you get them right.</p></div>`
           : ''
       }
       ${friendSummaryHtml(g.friendsBefore, p, g.friendEvents)}
@@ -331,7 +332,7 @@ const screens = {
     return `${topbar('Packs')}
       ${
         r && !r.item
-          ? `<div class="reveal"><div class="flip collectible"><div class="art">💎</div><p><strong>You have every friend!</strong><br>+${r.shards} shards</p></div></div>`
+          ? `<div class="reveal"><div class="flip collectible"><div class="art">💎</div><p><strong>You have every friend!</strong><br>+${r.shards} gem dust</p></div></div>`
           : r
           ? `<div class="reveal"><div class="flip">${collectibleCard(r.item, {
               cls: r.super ? 'ultra-glow' : '',
@@ -340,7 +341,7 @@ const screens = {
                 : r.gold
                 ? `<p><strong>✨ Gold version!</strong><br>Gold friends get +${GOLD_BONUS} power.</p>`
                 : r.duplicate
-                ? `<p><strong>You already have this one!</strong><br>+${r.shards} 💎 shards</p>`
+                ? `<p><strong>You already have this one!</strong><br>+${r.shards} 💎 gem dust</p>`
                 : '<p><strong>New friend!</strong></p>',
             })}</div></div>`
           : ''
@@ -363,26 +364,26 @@ const screens = {
           }).join('')}
         </div>
         <div class="row" style="margin-top:16px">
-          <button class="big" data-action="open-pack" ${check.ok ? '' : 'disabled'}>Open ${theme.emoji} pack · 🪙 ${packCost(p, now)}</button>
+          <button class="big" data-action="open-pack" ${check.ok ? '' : 'disabled'}>Open ${theme.emoji} pack · 🟡 ${packCost(p, now)}</button>
           <span class="muted">${left} of ${DAILY_PACK_CAP} packs left today</span>
         </div>
-        ${check.reason === 'coins' ? `<p class="muted">You need ${packCost(p, now) - p.coins} more coins. Spell words to earn them!</p>` : ''}
-        <p class="small muted">Packs today cost ${PACK_COSTS.slice(0, DAILY_PACK_CAP).join(', ')} coins. Back to ${PACK_COSTS[0]} tomorrow.</p>
+        ${check.reason === 'coins' ? `<p class="muted">You need ${packCost(p, now) - p.coins} more nuggets. Spell words to earn them!</p>` : ''}
+        <p class="small muted">Packs today cost ${PACK_COSTS.slice(0, DAILY_PACK_CAP).join(', ')} nuggets. Back to ${PACK_COSTS[0]} tomorrow.</p>
         ${check.reason === 'cap' ? '<p class="muted">That\'s all the packs for today. More tomorrow!</p>' : ''}
-        ${themeProgress(theme, p.collection).complete ? '<p class="muted">You have every friend in this theme, so packs here give shards.</p>' : ''}
+        ${themeProgress(theme, p.collection).complete ? '<p class="muted">You have every friend in this theme, so packs here give gem dust.</p>' : ''}
       </div>
       <div class="card small">
         <h3>What's in a pack</h3>
         <p>Each pack has one friend from the theme you pick. Friends you don't have yet always come first.</p>
         <table>
-          <tr><th>Rarity</th><th>Chance</th><th>Shards if you already have it</th></tr>
+          <tr><th>Rarity</th><th>Chance</th><th>Gem dust if you already have it</th></tr>
           ${Object.entries(ODDS)
             .map(([k, v]) => `<tr><td class="rarity ${k}">${k}</td><td>${Math.round(v * 100)}%</td><td>${SHARDS_FOR_DUPLICATE[k]} 💎</td></tr>`)
             .join('')}
         </table>
         <p>Rare or better guaranteed within <strong>${pity.rareIn}</strong> pack${pity.rareIn === 1 ? '' : 's'}.
            Epic guaranteed within <strong>${pity.epicIn}</strong>.</p>
-        <p class="muted">Shards let you pick any missing common, rare or epic friend in your Collection. Ultras and gold versions only come from Super Packs, and Legendaries only from finishing a whole set, so the best friends always take mastering.</p>
+        <p class="muted">Gem dust lets you pick any missing common, rare or epic friend in your Collection. Ultras and gold versions only come from Super Packs, and Legendaries only from finishing a whole set, so the best friends always take mastering.</p>
       </div>`;
   },
 
@@ -403,6 +404,8 @@ const screens = {
         <div class="small" style="margin-top:8px">${powerLines}</div>
       </div>
       ${friendsHelpHtml()}
+      <div class="card"><div class="row spread"><h3>💎 Gem Cutter</h3><span class="pill">💎 ${p.shards} gem dust</span></div>
+        <p class="small muted">Cut gem dust into any missing common, rare or epic friend: tap 💎 Cut under a friend below (${Object.entries(CRAFT_COST).map(([r, c]) => `${r} ${c}`).join(', ')}). Gem dust comes from duplicate friends, polishing mastered words and facts, and expeditions.</p></div>
       ${legendsHtml(p)}
       ${nextTheme() ? `<div class="card"><h3>${nextTheme().emoji} ${esc(nextTheme().name)}: coming ${new Date(nextTheme().from + 'T12:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</h3><p class="small muted">A new theme with 12 new friends arrives every month.</p></div>` : ''}
       ${themesOpen().map((t) => {
@@ -419,7 +422,7 @@ const screens = {
                   ? `<button class="${onTeam ? '' : 'secondary'}" data-action="toggle-team" data-id="${item.id}">${onTeam ? 'On team ✓' : 'Add to team'}</button>`
                   : cost === undefined
                   ? '<div class="small muted" style="margin-top:8px">🌟 From Super Packs</div>'
-                  : `<button class="secondary" data-action="craft" data-id="${item.id}" ${p.shards >= cost ? '' : 'disabled'}>Make for ${cost} 💎</button>`;
+                  : `<button class="secondary" data-action="craft" data-id="${item.id}" ${p.shards >= cost ? '' : 'disabled'}>💎 Cut · ${cost}</button>`;
                 return collectibleCard(item, { owned, extra, cls: onTeam ? 'on-team' : '' });
               })
               .join('')}
@@ -521,6 +524,7 @@ const screens = {
         ${aiVoiceHtml()}
       </div>
       ${math.parentHtml(kid)}
+      ${grantHtml(kid, esc)}
       ${farm.parentHtml(kid)}
       ${kid ? trickyParentHtml(kid) : ''}
       ${
@@ -557,7 +561,7 @@ const screens = {
               : ''
           }
           <p class="small muted">Mastery is a 0–${MAX_BOX} star rating. The first 2 stars can come in one round; from then on a word earns at most one new star a day, so a word takes at least 4 days of practice to master and cramming a list in one sitting doesn't (Word Match works the same way; times tables don't wait). A miss takes away 2 stars.
-            🔊 plays a word the way the kids hear it. ✕ deletes a word completely (for typos), stars and all. Coins and cards already earned stay.</p>
+            🔊 plays a word the way the kids hear it. ✕ deletes a word completely (for typos), stars and all. Nuggets and cards already earned stay.</p>
           <p class="small muted preview-status"></p>
         </div>
         ${vocab.parentHtml(kid)}`
@@ -565,20 +569,20 @@ const screens = {
       }
       <div class="card small">
         <h3>How rewards work</h3>
-        <p>Coins only come from correct answers, never from finishing a round. A word pays by how well it's known:
-          ${BOX_COINS.join(', ')} coins from new to mastered, plus ${COMEBACK_BONUS} for getting a recently missed word right.
+        <p>Nuggets only come from correct answers, never from finishing a round. A word pays by how well it's known:
+          ${BOX_COINS.join(', ')} nuggets from new to mastered, plus ${COMEBACK_BONUS} for getting a recently missed word right.
           Using a hint pays half. XP (${XP_PER.correct} per correct answer, ${XP_PER.monster} per gem, ore bucket or cart station) only unlocks looks in the Locker.</p>
-        <p>Coins slow down after a lot of play in one day: the first ${COIN_PACE[0].upTo} coins pay in full, then answers pay half until ${COIN_PACE[1].upTo}, then 1 coin each until ${DAILY_COIN_MAX}, when the coin bag is full until tomorrow. Mastery rewards always pay in full.</p>
-        <p>At most ${DAILY_PACK_CAP} packs a day, and each one costs a bit more than the last: ${PACK_COSTS.slice(0, DAILY_PACK_CAP).join(', ')} coins, back to ${PACK_COSTS[0]} the next day. Odds: ${Object.entries(ODDS)
+        <p>Nuggets slow down after a lot of play in one day: the first ${COIN_PACE[0].upTo} nuggets pay in full, then answers pay half until ${COIN_PACE[1].upTo}, then 1 nugget each until ${DAILY_COIN_MAX}, when the nugget bag is full until tomorrow. Mastery rewards always pay in full.</p>
+        <p>At most ${DAILY_PACK_CAP} packs a day, and each one costs a bit more than the last: ${PACK_COSTS.slice(0, DAILY_PACK_CAP).join(', ')} nuggets, back to ${PACK_COSTS[0]} the next day. Odds: ${Object.entries(ODDS)
           .map(([k, v]) => `${k} ${Math.round(v * 100)}%`)
           .join(', ')}. A rare or better is guaranteed every ${RARE_PITY} packs and an epic every ${EPIC_PITY}.
-          Missing friends always come before duplicates, duplicates become shards, and shards can make any missing friend except ultras.
-          Shards also come from refreshing a mastered word or fact (${REFRESH_SHARDS} each) and from Friend Grove expeditions. The 🌠 Wishing Well (on the Packs screen) gives a missing friend with an element or job the kid picks, for coins (uses one of the day's packs) or shards; never an ultra or Legendary.
+          Missing friends always come before duplicates, duplicates become gem dust, and gem dust can make any missing friend except ultras.
+          Gem dust also comes from polishing a mastered word or fact (${REFRESH_SHARDS} each) and from Friend Grove expeditions. The 🌠 Wishing Well (on the Packs screen) gives a missing friend with an element or job the kid picks, for nuggets (uses one of the day's packs) or gem dust; never an ultra or Legendary.
           Nothing in the app costs money.</p>
-        <p><strong>The big rewards come from mastering words.</strong> The first time a word reaches ${MAX_BOX} stars it pays ${MASTERY_COINS} coins and ${XP_PER.mastered} XP,
-          and every ${SUPER_PACK_EVERY} mastered words earn a Super Pack: an ultra friend, or once a theme's ultras are owned, a ✨ gold version (+${GOLD_BONUS} power) of a rare, epic or ultra friend (not limited by the daily cap). Ultras and gold versions can't be bought with coins or shards.</p>
+        <p><strong>The big rewards come from mastering words.</strong> The first time a word reaches ${MAX_BOX} stars it pays ${MASTERY_COINS} nuggets and ${XP_PER.mastered} XP,
+          and every ${SUPER_PACK_EVERY} mastered words earn a Super Pack: an ultra friend, or once a theme's ultras are owned, a ✨ gold version (+${GOLD_BONUS} power) of a rare, epic or ultra friend (not limited by the daily cap). Ultras and gold versions can't be bought with nuggets or gem dust.</p>
         <p><strong>🏆 Legendary friends</strong> only come from finishing a whole set: a Table Titan for each times table from 3 to 12 (every × and ÷ fact mastered), one for every ${LEGEND_RULES.weekStars} Week Stars (a Week Star = every word on that week's list mastered, at least ${LEGEND_RULES.minWeekWords} words), and one for every ${LEGEND_RULES.vocabWords} mastered Word Match words.</p>
-        <p><strong>🔄 Refresh:</strong> mastered words and facts come back after 7 days, then 14, 30 and 60 (half as long for ones that were missed a couple of times). Until they're answered right again they show 4 stars and 🔄. Mastery rewards are only paid once. A new theme with 12 friends arrives each month through June.</p>
+        <p><strong>🧽 Polishing:</strong> mastered words and facts lose their shine and come back after 7 days, then 14, 30 and 60 (half as long for ones that were missed a couple of times). Until they're polished up with a right answer they show 4 stars and 🧽, and each polish gives ${REFRESH_SHARDS} 💎 gem dust. Mastery rewards are only paid once. A new theme with 12 friends arrives each month through June.</p>
       </div>
       <div class="card">
         <h3>Backup</h3>
@@ -600,7 +604,7 @@ function playTop() {
   return `<div class="topbar">
       <button class="secondary" data-action="end-round">Done</button>
       <span class="pill">Word ${Math.min(b.asked + (g.phase === 'ask' ? 1 : 0), ROUND_LENGTH)} of ${ROUND_LENGTH}</span>
-      <span class="pill">🪙 ${p.coins}</span>
+      <span class="pill">🟡 ${p.coins}</span>
     </div>
     ${arenaHtml('spelling', { hero: heroHtml(p), combo: b.combo, zap: g.zap, anim: g.anim, target: g.shownMonster, hp: g.shownHp, from: g.from })}`;
 }
@@ -904,14 +908,15 @@ function submitAnswer(value) {
     g.zap = zapText('spelling', hit.damage);
     g.feedback = defeated ? clearedText('spelling', defeated.monster) : ['Nice!', 'Yes!', 'Great spelling!', 'Clink!'][Math.floor(Math.random() * 4)];
     if (rec.starWaits && !defeated) g.feedback += ' Next ⭐ for this word tomorrow.';
+    if (rec.shards && !defeated) g.feedback = `✨ Polished back to shiny! +${rec.shards} 💎`;
     if (rec.mastered) {
       g.mastered.push(g.word.id);
       g.earned.coins += MASTERY_COINS;
-      g.feedback = `🌟 You mastered “${g.word.word}”! +${MASTERY_COINS} 🪙`;
+      g.feedback = `🌟 You mastered “${g.word.word}”! +${MASTERY_COINS} 🟡`;
     }
     g.feedbackClass = 'good';
     render();
-    if (rec.coins) floatText(`+${rec.coins} 🪙`);
+    if (rec.coins) floatText(`+${rec.coins} 🟡`);
     advanceLater(rec.mastered ? 2200 : defeated ? 1300 : 900);
   } else {
     g.missed.add(g.word.id);
@@ -958,6 +963,15 @@ function trickyParentHtml(kid) {
 
 // ---------- events ----------
 const actions = {
+  grant: (d) => {
+    const kid = data.profiles[ui.parentKid];
+    if (!kid) return;
+    const y = window.scrollY;
+    update(grant(kid, d.id, d.n === 'reset' ? 0 : Number(d.n)));
+    floatText(d.n === 'reset' ? `${grantName(d.id)} reset for ${kid.name}` : `${grantName(d.id)} +${d.n} for ${kid.name}`);
+    render();
+    window.scrollTo(0, y);
+  },
   go: (d) => go(d.to),
   'pick-kid': (d) => {
     data.activeId = d.id;
@@ -1018,7 +1032,7 @@ const actions = {
   'remove-word': (d) => {
     const kid = data.profiles[ui.parentKid];
     const w = kid?.words.find((x) => x.id === d.id);
-    if (!w || !confirm(`Delete “${w.word}” completely? Its stars and history are erased. Coins and cards already earned stay.`)) return;
+    if (!w || !confirm(`Delete “${w.word}” completely? Its stars and history are erased. Nuggets and cards already earned stay.`)) return;
     update(removeWord(kid, d.id));
     render();
     pruneClips(allClipSpecs()).then(() => refreshAiStatus()).catch(() => {});
@@ -1103,7 +1117,7 @@ const actions = {
   },
   craft: (d) => {
     const item = ITEMS_BY_ID[d.id];
-    if (!confirm(`Use ${CRAFT_COST[item.rarity]} shards to make ${item.name}?`)) return;
+    if (!confirm(`Use ${CRAFT_COST[item.rarity]} gem dust at the Gem Cutter to make ${item.name}?`)) return;
     const { profile: p, newly } = claimSetRewards(craft(profile(), d.id));
     update(p);
     render();

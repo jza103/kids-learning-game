@@ -1,7 +1,7 @@
 // Offline support: precache the app shell, then serve from cache and refresh
 // the cache in the background (stale-while-revalidate), so updates show up on
 // the next launch. Bump VERSION when adding or removing files.
-const VERSION = 'v26';
+const VERSION = 'v27';
 const CACHE = `spelling-${VERSION}`;
 const SHELL = [
   './',
@@ -39,6 +39,7 @@ const SHELL = [
   './src/farmui.js',
   './src/sunshine.js',
   './src/mine.js',
+  './src/grant.js',
 ];
 
 self.addEventListener('install', (event) => {
