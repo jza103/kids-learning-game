@@ -12,7 +12,8 @@ import {
   biomeBlock, biomeCost, openBiome, decorCost, buyDecor, journalProgress, perkUsesLeft, usePerk, canGift, sendGift, farmLocked,
   FERTILIZER_SHARDS, GIFT_MAX, FARM_XP_PER_DAY, sunLeft, sunJar, pourSun, sunToFinish, sunUseful, goldenSeason, MORNING_RAIN, GOODY_SUN,
   FORAGE_PER_POWER_SUN, expeditionSlots, biomeOpen, benchFriends, needsMet, fitsNeed, sendExpedition, collectExpedition, welcomeExplorer,
-  EXPEDITION_SUN, TEAM_SIZE_FOR, EXPEDITION_SHARDS, NEED_SPEED, expeditionSpeed, nextExpansion, expandCrew, pourTips, routeExplorer, MAX_SLOTS,
+  EXPEDITION_SUN, TEAM_SIZE_FOR, EXPEDITION_SHARDS, NEED_SPEED, handOf, friendRank, jobStamps, allRounder, isTired, whereIs, RANKS, ENERGY_MAX,
+  ENERGY_REST, MORNING_ENERGY, TRIP_ENERGY, JOB_STAMP_SUN, expeditionSpeed, nextExpansion, expandCrew, pourTips, routeExplorer, MAX_SLOTS,
 } from './farm.js';
 import { ROUTES_BY_ID } from './farm-content.js';
 import { THEMES } from './content.js';
@@ -20,6 +21,7 @@ import { THEMES } from './content.js';
 const TABS = [
   ['farm', '🌻', 'Farm'],
   ['crew', '🧑‍🌾', 'Crew'],
+  ['friends', '👥', 'Friends'],
   ['map', '🗺️', 'Expeditions'],
   ['board', '📋', 'Requests'],
   ['build', '🔨', 'Build'],
@@ -52,6 +54,7 @@ export function initFarm(ctx) {
   function eventText(e) {
     switch (e.type) {
       case 'level': return `🎉 Farm level ${e.level}!`;
+      case 'rank': return `${RANKS[e.rank].emoji} ${friend(e.id).name} is now a farm ${RANKS[e.rank].name}!`;
       case 'rain': return `🌧️ Morning Rain: +${e.n} ☀️ in your Sun Jar.`;
       case 'golden': return `🌟 Golden Season! You've mastered everything, so your farm grew on its own: +${e.n} ☀️`;
       case 'souvenir': return `🏆 New souvenir: ${ROUTES_BY_ID[e.id].souvenir.emoji} ${ROUTES_BY_ID[e.id].souvenir.name}`;
@@ -113,6 +116,18 @@ export function initFarm(ctx) {
     const t = farmTrait(id);
     if (!t) return '';
     return `<span class="trait">${JOBS[t.job].emoji} ${JOBS[t.job].name} · ${ELEMENTS[t.element].emoji} ${ELEMENTS[t.element].name}</span>`;
+  }
+
+  /** Rank and energy for one friend, e.g. "🌿 Helper · ⚡ 72". */
+  function handTag(f, id) {
+    const h = handOf(f, id);
+    const r = RANKS[friendRank(f, id)];
+    const e = Math.round(h.energy);
+    return `<span class="hand ${e <= 0 ? 'tired' : ''}">${r.emoji} ${r.name}${allRounder(f, id) ? ' · 🎖️' : ''} · ${e <= 0 ? '😴 Tired' : `⚡ ${e}`}</span>`;
+  }
+  function energyBar(f, id) {
+    const pct = Math.max(0, Math.min(100, (100 * handOf(f, id).energy) / ENERGY_MAX));
+    return `<div class="energy"><div style="width:${pct}%"></div></div>`;
   }
 
   function crewLine(p, station) {
@@ -233,7 +248,7 @@ export function initFarm(ctx) {
       const members = f.crew[st].map((id) => {
         const left = perkUsesLeft(p, id, now);
         const t = farmTrait(id);
-        return `<div class="crew-card"><span class="big-emoji">${friend(id).emoji}</span><div style="flex:1"><strong>${esc(friend(id).name)}</strong> <span class="small">+${workPower(p, id, st)}</span><div>${traitBadge(id)}</div>
+        return `<div class="crew-card"><span class="big-emoji">${friend(id).emoji}</span><div style="flex:1"><strong>${esc(friend(id).name)}</strong> <span class="small">+${workPower(p, id, st)}</span><div>${traitBadge(id)} ${handTag(f, id)}</div>${energyBar(f, id)}
           ${t.perk ? `<button class="small-btn" data-action="farm-perk" data-id="${id}" ${left ? '' : 'disabled'}>${t.perk.emoji} ${t.perk.name}${left ? ` (${left})` : ' (tomorrow)'}</button>` : ''}</div>
           <button class="ghost" data-action="farm-unassign" data-id="${id}" aria-label="Take off crew">✕</button></div>`;
       }).join('');
@@ -243,7 +258,7 @@ export function initFarm(ctx) {
         ${expandHtml(p, st)}
         ${st === 'build' ? `<p class="small muted">Builders take ${Math.round(buildDiscount(p) * 100)}% off building. New lands need a friend of the right element on this crew.</p>` : ''}</div>`;
     }).join('');
-    return `<div class="card small"><p>Every friend has a <strong>job</strong> and an <strong>element</strong>. A friend working its own job counts double, Super and Best Friends and gold friends work harder, and rare-and-up friends have a once-a-day perk. Each area starts small: expand it with 🔔 Grove Bells (up to ${MAX_SLOTS} friends) as your farm levels up.</p></div>
+    return `<div class="card small"><p>Every friend has a <strong>job</strong> and an <strong>element</strong>. A friend working its own job counts double, Super and Best Friends and gold friends work harder, and rare-and-up friends have a once-a-day perk. Each area starts small: expand it with 🔔 Grove Bells (up to ${MAX_SLOTS} friends) as your farm levels up. Workers get tired, so check 👥 Friends to swap in rested ones.</p></div>
       ${pickerHtml(p)}${stations}`;
   }
 
@@ -252,14 +267,51 @@ export function initFarm(ctx) {
     if (!st) return '';
     const f = p.farm;
     const owned = Object.keys(p.collection).filter((id) => friend(id) && farmTrait(id));
-    owned.sort((a, b) => workPower(p, b, st) - workPower(p, a, st) || friend(a).name.localeCompare(friend(b).name));
+    const away = (id) => (whereIs(f, id) === 'trip' ? 1 : 0);
+    owned.sort((a, b) => away(a) - away(b) || workPower(p, b, st) - workPower(p, a, st) || friend(a).name.localeCompare(friend(b).name));
     return `<div class="card picker"><div class="row spread"><h3>Who works the ${STATIONS[st].name}?</h3><button class="ghost" data-action="farm-pick" data-id="">Close</button></div>
       ${owned.length ? `<div class="pick-list">${owned.map((id) => {
-        const at = stationOf(f, id);
-        return `<button class="secondary pick-friend ${at === st ? 'selected' : ''}" data-action="farm-assign" data-id="${id}">
-          <span class="big-emoji">${friend(id).emoji}</span><div><strong>${esc(friend(id).name)}</strong> +${workPower(p, id, st)}<div>${traitBadge(id)}</div>
-          ${at && at !== st ? `<div class="small muted">now on ${STATIONS[at].name}</div>` : ''}</div></button>`;
+        const at = whereIs(f, id);
+        return `<button class="secondary pick-friend ${at === st ? 'selected' : ''}" data-action="farm-assign" data-id="${id}" ${at === 'trip' ? 'disabled' : ''}>
+          <span class="big-emoji">${friend(id).emoji}</span><div><strong>${esc(friend(id).name)}</strong> +${workPower(p, id, st)}<div>${traitBadge(id)} ${handTag(f, id)}</div>
+          ${at === 'trip' ? '<div class="small muted">on an expedition</div>' : at && at !== st ? `<div class="small muted">now on ${STATIONS[at].name}</div>` : ''}</div></button>`;
       }).join('')}</div>` : '<p class="muted">Get friends from packs by learning, then they can work here.</p>'}</div>`;
+  }
+
+  // ---------- Friends (roster) tab ----------
+  function friendsTab(p) {
+    const f = p.farm;
+    const owned = Object.keys(p.collection || {}).filter((id) => friend(id) && farmTrait(id));
+    const filter = ui.farm.rosterFilter || 'all';
+    const groupOf = (id) => {
+      const at = whereIs(f, id);
+      if (at === 'trip') return 'trip';
+      if (at) return isTired(f, id) ? 'tired' : 'working';
+      return 'resting';
+    };
+    const order = { tired: 0, working: 1, resting: 2, trip: 3 };
+    const shown = owned.filter((id) => filter === 'all' || groupOf(id) === filter);
+    shown.sort((a, b) => order[groupOf(a)] - order[groupOf(b)] || handOf(f, a).energy - handOf(f, b).energy || friend(a).name.localeCompare(friend(b).name));
+    const count = (g) => owned.filter((id) => groupOf(id) === g).length;
+    const chips = [['all', `All ${owned.length}`], ['working', `🧑‍🌾 Working ${count('working')}`], ['tired', `😴 Tired ${count('tired')}`], ['resting', `💤 Resting ${count('resting')}`], ['trip', `🗺️ Exploring ${count('trip')}`]];
+    const rows = shown.map((id) => {
+      const at = whereIs(f, id);
+      const full = (st) => f.crew[st].length >= slotsFor(f, st) && at !== st;
+      const stamps = jobStamps(f, id);
+      const moves = at === 'trip'
+        ? '<span class="small muted">🗺️ On an expedition</span>'
+        : `${STATION_IDS.map((st) => `<button class="small-btn ${at === st ? '' : 'secondary'}" data-action="farm-roster" data-id="${id}" data-st="${st}" ${full(st) ? 'disabled' : ''} title="${STATIONS[st].name}">${STATIONS[st].emoji}</button>`).join('')}
+           <button class="small-btn ${at ? 'secondary' : ''}" data-action="farm-roster" data-id="${id}" data-st="" title="Rest">💤</button>`;
+      return `<div class="roster-row ${groupOf(id)}"><span class="big-emoji">${friend(id).emoji}</span>
+        <div style="flex:1;min-width:0"><strong>${esc(friend(id).name)}</strong> <span class="small muted">${at === 'trip' ? 'exploring' : at ? STATIONS[at].name : 'resting'}</span>
+          <div>${traitBadge(id)} ${handTag(f, id)}</div>${energyBar(f, id)}
+          <div class="small muted">Stamps: ${STATION_IDS.map((st) => (stamps.includes(st) ? STATIONS[st].emoji : '▫️')).join('')}</div></div>
+        <div class="roster-moves">${moves}</div></div>`;
+    }).join('');
+    return `<div class="card small"><p>Every friend has ⚡ <strong>energy</strong> and farm know-how. Friends on a crew learn as you pour Sunshine and rank up from ${RANKS.map((r) => r.emoji).join(' → ')}; each rank helps them work harder. Working uses energy. A tired friend 😴 still works, but at half power, and stops learning.
+      Resting friends get ${ENERGY_REST}× the energy back from the same Sunshine, plus ${MORNING_ENERGY} every morning, so swap them around! Work ${JOB_STAMP_SUN} ☀️ in every area for an All-Rounder 🎖️ medal (+1 power everywhere).</p></div>
+      <div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:10px">${chips.map(([id, label]) => `<button class="small-btn ${filter === id ? '' : 'secondary'}" data-action="farm-roster-filter" data-id="${id}">${label}</button>`).join('')}</div>
+      <div class="card">${rows || '<p class="muted">Nobody here right now.</p>'}</div>`;
   }
 
   // ---------- Requests tab ----------
@@ -403,7 +455,7 @@ export function initFarm(ctx) {
         const on = team.includes(id);
         const fits = r.needs.filter((n) => fitsNeed(id, n)).length;
         return `<button class="secondary pick-friend ${on ? 'selected' : ''}" data-action="farm-trip-pick" data-id="${id}" ${!on && team.length >= size ? 'disabled' : ''}>
-          <span class="big-emoji">${friend(id).emoji}</span><div><strong>${esc(friend(id).name)}</strong>${fits ? ` <span class="small">⭐${fits > 1 ? '×' + fits : ''}</span>` : ''}<div>${traitBadge(id)}</div></div></button>`;
+          <span class="big-emoji">${friend(id).emoji}</span><div><strong>${esc(friend(id).name)}</strong>${fits ? ` <span class="small">⭐${fits > 1 ? '×' + fits : ''}</span>` : ''}<div>${traitBadge(id)} ${handTag(p.farm, id)}</div></div></button>`;
       }).join('')}</div>` : '<p class="muted">Everyone is busy. Take some friends off farm crews to send them exploring.</p>'}
     </div>`;
   }
@@ -429,7 +481,7 @@ export function initFarm(ctx) {
       const p = profile();
       const now = Date.now();
       if (!p.farm) return `${header({ ...p, farm: visitFarm(p, now).profile.farm })}`;
-      const tab = { farm: farmTab, crew: crewTab, map: mapTab, board: boardTab, build: buildTab, journal: journalTab }[ui.farm.tab] || farmTab;
+      const tab = { farm: farmTab, crew: crewTab, friends: friendsTab, map: mapTab, board: boardTab, build: buildTab, journal: journalTab }[ui.farm.tab] || farmTab;
       return `${header(p)}${tab(p, now)}`;
     },
   };
@@ -555,6 +607,15 @@ export function initFarm(ctx) {
       }
     },
     'farm-unassign': (d) => act((p) => removeCrew(p, d.id)),
+    'farm-roster': (d) => {
+      const y = window.scrollY;
+      act((p) => (d.st ? assignCrew(p, d.id, d.st) : stationOf(p.farm, d.id) ? removeCrew(p, d.id) : p));
+      window.scrollTo(0, y);
+    },
+    'farm-roster-filter': (d) => {
+      ui.farm.rosterFilter = d.id;
+      render();
+    },
     'farm-perk': (d) => act((p, now) => usePerk(p, d.id, now)),
     'farm-fill': (d) => {
       const r = act((p, now) => fillRequest(p, num(d.i), now));
@@ -614,7 +675,7 @@ export function initFarm(ctx) {
     return `<div class="card">
       <h3>🌻 Friend Grove</h3>
       <p class="small muted">A farm side game where friends work, crops grow, critters move in and friends go on expeditions. <strong>Learning powers it:</strong> every correct answer in any game puts ☀️ Sunshine in the Sun Jar (2 for a word that was missed last time, +10 for mastering one; warm-up facts give none), and Sunshine is what grows everything, not the clock. So there's no reason to check in at set times, and nothing is lost while away. There's ${MORNING_RAIN} free Sunshine each morning. When a kid has mastered everything and nothing needs a refresh, the farm grows on its own (Golden Season).
-        The farm pays its own Grove Bells and never coins, packs or friends. Mastering gives Wonder Seeds; finishing sets gives Mystery Eggs. Farm XP comes mostly from pouring Sunshine (1 XP each), so farm progress follows learning, and it's capped at ${FARM_XP_PER_DAY} a day. Farm level gates bigger crew areas, new lands and more expedition teams, and each land's routes hold their own treasures, so collecting everything takes weeks, not a weekend. Learning itself is never capped.</p>
+        The farm pays its own Grove Bells and never coins, packs or friends. Mastering gives Wonder Seeds; finishing sets gives Mystery Eggs. Farm XP comes mostly from pouring Sunshine (1 XP each), so farm progress follows learning, and it's capped at ${FARM_XP_PER_DAY} a day. Farm level gates bigger crew areas, new lands and more expedition teams, and each land's routes hold their own treasures, so collecting everything takes weeks, not a weekend. Learning itself is never capped. Each friend also has ⚡ energy and farm know-how: working uses energy and earns know-how, resting friends recover from the same Sunshine (plus a little each morning), so kids rotate friends instead of leaving one crew in place. A tired friend still works at half power; nothing is lost.</p>
       <label class="row"><input type="checkbox" data-action-change="farm-gate" ${kid.farmGate ? 'checked' : ''}> Only open Friend Grove after ${esc(kid.name)} plays a learning game that day</label>
     </div>`;
   }
