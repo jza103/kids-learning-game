@@ -282,3 +282,8 @@ table.check td { vertical-align: top; }
   [data-screen="math-trial"] .keypad { gap: 8px; }
   [data-screen="math-trial"] .keypad button { min-height: 56px; }
 }
+
+/* Gold versions and Legendary friends */
+.collectible.gold { border-color: #e2b007; background: linear-gradient(160deg, #fff8db, var(--card) 60%); box-shadow: 0 0 14px rgba(226, 176, 7, .45); }
+.rarity.legendary { color: #b45309; text-shadow: 0 0 6px rgba(245, 165, 36, .6); }
+.collectible.legendary:not(.missing) { border-color: #b45309; background: linear-gradient(160deg, #fde68a, #fbcfe8 55%, #ddd6fe); }
