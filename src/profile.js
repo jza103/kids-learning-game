@@ -18,6 +18,7 @@ export function newProfile(name, now, id = `kid-${now.toString(36)}`) {
     packs: newPackState(),
     collection: {}, // itemId -> count
     team: [],
+    friends: {}, // itemId -> friend growth (XP, training), see friends.js
     completedSets: [],
     masteredWords: 0,
     superProgress: 0, // mastered words toward the next Super Pack
@@ -150,7 +151,7 @@ export function entryWarnings({ word, sentence }) {
 
 /** Bring a profile saved by an older version up to date. */
 export function migrateProfile(p) {
-  const out = { masteredWords: 0, superProgress: 0, superPacks: 0, ...p };
+  const out = { masteredWords: 0, superProgress: 0, superPacks: 0, friends: {}, ...p };
   if (out.currentBatch == null) {
     const batch = out.createdAt || 1;
     out.words = out.words.map((w) => ({ addedAt: batch, batch, ...w }));

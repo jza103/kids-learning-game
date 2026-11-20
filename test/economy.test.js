@@ -171,7 +171,7 @@ test('team powers add up by rarity; only the first three count', () => {
   const whale = ocean.items.find((i) => i.id === 'ocean-whale'); // epic shield
   const puff = ocean.items.find((i) => i.id === 'ocean-puffer');
   const powers = teamPowers([octopus.id, shrimp.id, whale.id, puff.id]);
-  assert.deepEqual(powers, { hint: 3, power: 0, shield: 3, xp: 0 });
+  assert.deepEqual(powers, { hint: 3, power: 0, shield: 3, xp: 0, buddy: 0 });
 });
 
 test('levels follow the XP curve', () => {

@@ -232,3 +232,9 @@ table.check td { vertical-align: top; }
   [data-screen="math-play"] .fact.small-fact { font-size: 1.6rem; }
   [data-screen="math-play"] .correct-fact { font-size: 1.8rem; }
 }
+
+/* Friend growth (friends.js) */
+.friend-meta { display: grid; gap: 4px; margin-top: 6px; }
+.xpbar.sm { height: 8px; }
+.gt { white-space: nowrap; }
+.friend-event { font-size: 1.15rem; margin: 6px 0; }

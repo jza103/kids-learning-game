@@ -1,23 +1,24 @@
 // UI for the times tables game. app.js passes in its helpers and merges these
 // screens and actions into its own.
-import { MONSTERS, ITEMS_BY_ID } from './content.js';
+import { MONSTERS } from './content.js';
 import { MAX_BOX } from './srs.js';
 import { newBattle, applyAnswer } from './battle.js';
-import { teamPowers, applyXpBoost, levelForXp, XP_PER } from './progress.js';
+import { applyXpBoost, levelForXp, XP_PER } from './progress.js';
+import { teamPowersFor, friendsAfterAnswer } from './friends.js';
+import { teamLineHtml, friendSummaryHtml } from './friendsui.js';
 import {
   GAME_TYPE, OPS, MODES, ROUND_LENGTH, MAX_FACTOR, PRACTICE_MAX_BOX, PRACTICE_REWARD, SECONDS_CHOICES, UNLOCK_ORDER,
   FACT_MASTERY_COINS, FACTS_PER_SUPER_STEP, mathState, poolFor, pickFact, recordFact, maybeUnlock, unlockedTables,
   tableSummary, trickyFacts, factHint, factById, itemFor, tableFacts,
 } from './math.js';
 
-// ---- Friend hooks (the friends feature swaps these for game-type aware versions) ----
-/** Team powers that apply in the math game. */
+// ---- Friend hooks: only friends that know math give powers here; all of them learn. ----
 function mathPowers(p) {
-  return teamPowers(p.team, GAME_TYPE);
+  return teamPowersFor(p, GAME_TYPE);
 }
-/** Called once per answer so friends can learn; returns { profile, events }. */
+/** Called once per answer (result: 'correct' | 'assisted' | 'wrong'); returns { profile, events }. */
 function afterMathAnswer(p, result, practice) {
-  return { profile: p, events: [] };
+  return friendsAfterAnswer(p, GAME_TYPE, result, Date.now(), { practice });
 }
 
 const TABLES = Array.from({ length: MAX_FACTOR + 1 }, (_, i) => i);
@@ -121,9 +122,7 @@ export function initMath(ctx) {
               : ''
           }
         </div>
-        <p class="small muted" style="text-align:center">Team: ${
-          p.team.length ? p.team.map((id) => ITEMS_BY_ID[id]?.emoji).join(' ') : 'none yet. Add friends from your collection for powers!'
-        }</p>`;
+        <p class="small muted" style="text-align:center">${teamLineHtml(p, GAME_TYPE)}</p>`;
     },
 
     'math-summary'() {
@@ -143,6 +142,7 @@ export function initMath(ctx) {
           ${game.levelUp ? `<p style="font-size:1.3rem"><strong>Level up! You're level ${levelForXp(p.xp)}.</strong> Check the Locker for new stuff.</p>` : ''}
           ${game.mode === 'practice' ? `<p class="small muted">Practice pays half coins. Try ⚡ Speed for full coins and to master facts.</p>` : ''}
         </div>
+        ${friendSummaryHtml(game.friendsBefore, p, game.friendEvents)}
         ${
           missed.length
             ? `<div class="card"><h3>Facts to keep practicing</h3><p style="font-size:1.4rem">${missed.map((f) => `${esc(f.text)} = ${f.answer}`).join(' · ')}</p>
@@ -200,6 +200,8 @@ export function initMath(ctx) {
       fast: 0,
       earned: { coins: 0, xp: 0 },
       startLevel: levelForXp(p.xp),
+      friendsBefore: p,
+      friendEvents: [],
       token: 0,
     };
     nextFact();
@@ -292,7 +294,9 @@ export function initMath(ctx) {
     const right = value === f.answer;
     const result = !right ? 'wrong' : game.usedHint ? 'hinted' : game.mode === 'speed' && seconds > game.seconds ? 'slow' : 'correct';
     const rec = recordFact(profile(), f.id, result, { mode: game.mode, now: Date.now(), powers: game.powers });
-    let p = afterMathAnswer(rec.profile, rec.battleResult, game.mode === 'practice').profile;
+    const grown = afterMathAnswer(rec.profile, rec.battleResult, game.mode === 'practice');
+    game.friendEvents.push(...grown.events);
+    let p = grown.profile;
     game.earned.coins += rec.coins;
     game.earned.xp += rec.xp;
 

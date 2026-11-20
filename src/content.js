@@ -5,12 +5,15 @@
 //  hint   - reveal the first letters of a word (per-round charges)
 //  power  - extra damage on every correct answer
 //  shield - a miss doesn't let the monster heal (per-round charges)
-//  xp     - bonus XP (percent)
+//  xp     - bonus player XP (percent)
+//  buddy  - bonus friend XP for everyone on the team (percent, capped)
+// Each game type decides what hint/power/shield mean in that game.
 export const POWER_INFO = {
   hint: { label: 'Hint', describe: (n) => `${n} hint${n > 1 ? 's' : ''} per battle` },
   power: { label: 'Power', describe: (n) => `+${n} damage per hit` },
   shield: { label: 'Shield', describe: (n) => `blocks ${n} monster heal${n > 1 ? 's' : ''} per battle` },
-  xp: { label: 'XP boost', describe: (n) => `+${n * 10}% XP` },
+  xp: { label: 'XP boost', describe: (n) => `+${n * 10}% XP for you` },
+  buddy: { label: 'Friend boost', describe: (n) => `+${n * 10}% friend XP for the team` },
 };
 
 // 'ultra' only comes from Super Packs, which are earned by mastering words.
@@ -18,7 +21,9 @@ export const RARITIES = ['common', 'rare', 'epic', 'ultra'];
 // Strength of a collectible's power by rarity.
 export const RARITY_STRENGTH = { common: 1, rare: 2, epic: 3, ultra: 4 };
 
-const c = (id, name, emoji, rarity, power) => ({ id, name, emoji, rarity, power });
+// specialty: the game type ('spelling' | 'math' | 'vocab', see games.js) where
+// this friend's power works. Friends can learn more game types; see friends.js.
+const c = (id, name, emoji, rarity, power, specialty) => ({ id, name, emoji, rarity, power, specialty });
 
 export const THEMES = [
   {
@@ -27,18 +32,18 @@ export const THEMES = [
     emoji: '🌊',
     reward: 'Ocean Explorer',
     items: [
-      c('ocean-fish', 'Bubbles', '🐟', 'common', 'xp'),
-      c('ocean-crab', 'Pinchy', '🦀', 'common', 'shield'),
-      c('ocean-puffer', 'Puff', '🐡', 'common', 'power'),
-      c('ocean-shrimp', 'Wiggles', '🦐', 'common', 'hint'),
-      c('ocean-turtle', 'Sir Slowpoke', '🐢', 'common', 'shield'),
-      c('ocean-shell', 'Shelby', '🐚', 'common', 'xp'),
-      c('ocean-octopus', 'Inky', '🐙', 'rare', 'hint'),
-      c('ocean-dolphin', 'Dot', '🐬', 'rare', 'xp'),
-      c('ocean-shark', 'Finn', '🦈', 'rare', 'power'),
-      c('ocean-whale', 'Grand Gulp', '🐳', 'epic', 'shield'),
-      c('ocean-mermaid', 'Marina', '🧜', 'ultra', 'power'),
-      c('ocean-kraken', 'Kraken Jr.', '🦑', 'ultra', 'hint'),
+      c('ocean-fish', 'Bubbles', '🐟', 'common', 'buddy', 'spelling'),
+      c('ocean-crab', 'Pinchy', '🦀', 'common', 'shield', 'math'),
+      c('ocean-puffer', 'Puff', '🐡', 'common', 'power', 'vocab'),
+      c('ocean-shrimp', 'Wiggles', '🦐', 'common', 'hint', 'spelling'),
+      c('ocean-turtle', 'Sir Slowpoke', '🐢', 'common', 'shield', 'vocab'),
+      c('ocean-shell', 'Shelby', '🐚', 'common', 'xp', 'math'),
+      c('ocean-octopus', 'Inky', '🐙', 'rare', 'hint', 'math'),
+      c('ocean-dolphin', 'Dot', '🐬', 'rare', 'buddy', 'vocab'),
+      c('ocean-shark', 'Finn', '🦈', 'rare', 'power', 'spelling'),
+      c('ocean-whale', 'Grand Gulp', '🐳', 'epic', 'shield', 'spelling'),
+      c('ocean-mermaid', 'Marina', '🧜', 'ultra', 'power', 'vocab'),
+      c('ocean-kraken', 'Kraken Jr.', '🦑', 'ultra', 'hint', 'math'),
     ],
   },
   {
@@ -47,18 +52,18 @@ export const THEMES = [
     emoji: '🚀',
     reward: 'Star Captain',
     items: [
-      c('space-moon', 'Moony', '🌙', 'common', 'shield'),
-      c('space-star', 'Twinkle', '⭐', 'common', 'xp'),
-      c('space-comet', 'Zoom', '☄️', 'common', 'power'),
-      c('space-satellite', 'Beep', '🛰️', 'common', 'hint'),
-      c('space-planet', 'Ringo', '🪐', 'common', 'xp'),
-      c('space-rocket', 'Blastoff', '🚀', 'common', 'power'),
-      c('space-alien', 'Zib', '👽', 'rare', 'hint'),
-      c('space-ufo', 'Wobble', '🛸', 'rare', 'shield'),
-      c('space-robot', 'Bolt', '🤖', 'rare', 'power'),
-      c('space-sun', 'Big Sunny', '🌞', 'epic', 'xp'),
-      c('space-galaxy', 'Nova', '🌌', 'ultra', 'shield'),
-      c('space-wish', 'Wish', '🌠', 'ultra', 'power'),
+      c('space-moon', 'Moony', '🌙', 'common', 'shield', 'spelling'),
+      c('space-star', 'Twinkle', '⭐', 'common', 'xp', 'vocab'),
+      c('space-comet', 'Zoom', '☄️', 'common', 'power', 'math'),
+      c('space-satellite', 'Beep', '🛰️', 'common', 'hint', 'vocab'),
+      c('space-planet', 'Ringo', '🪐', 'common', 'buddy', 'math'),
+      c('space-rocket', 'Blastoff', '🚀', 'common', 'power', 'spelling'),
+      c('space-alien', 'Zib', '👽', 'rare', 'hint', 'spelling'),
+      c('space-ufo', 'Wobble', '🛸', 'rare', 'shield', 'vocab'),
+      c('space-robot', 'Bolt', '🤖', 'rare', 'power', 'math'),
+      c('space-sun', 'Big Sunny', '🌞', 'epic', 'xp', 'math'),
+      c('space-galaxy', 'Nova', '🌌', 'ultra', 'shield', 'spelling'),
+      c('space-wish', 'Wish', '🌠', 'ultra', 'power', 'vocab'),
     ],
   },
   {
@@ -67,18 +72,18 @@ export const THEMES = [
     emoji: '🌲',
     reward: 'Forest Ranger',
     items: [
-      c('forest-mushroom', 'Spotty', '🍄', 'common', 'shield'),
-      c('forest-hedgehog', 'Prickles', '🦔', 'common', 'shield'),
-      c('forest-snail', 'Zippy', '🐌', 'common', 'xp'),
-      c('forest-squirrel', 'Nutso', '🐿️', 'common', 'hint'),
-      c('forest-ladybug', 'Dotty', '🐞', 'common', 'power'),
-      c('forest-frog', 'Hops', '🐸', 'common', 'power'),
-      c('forest-owl', 'Professor Hoot', '🦉', 'rare', 'hint'),
-      c('forest-fox', 'Rusty', '🦊', 'rare', 'power'),
-      c('forest-deer', 'Antlers', '🦌', 'rare', 'xp'),
-      c('forest-unicorn', 'Glimmer', '🦄', 'epic', 'hint'),
-      c('forest-fairy', 'Pip', '🧚', 'ultra', 'xp'),
-      c('forest-dragon', 'Old Mossback', '🐉', 'ultra', 'power'),
+      c('forest-mushroom', 'Spotty', '🍄', 'common', 'shield', 'math'),
+      c('forest-hedgehog', 'Prickles', '🦔', 'common', 'shield', 'spelling'),
+      c('forest-snail', 'Zippy', '🐌', 'common', 'xp', 'spelling'),
+      c('forest-squirrel', 'Nutso', '🐿️', 'common', 'hint', 'math'),
+      c('forest-ladybug', 'Dotty', '🐞', 'common', 'power', 'vocab'),
+      c('forest-frog', 'Hops', '🐸', 'common', 'buddy', 'vocab'),
+      c('forest-owl', 'Professor Hoot', '🦉', 'rare', 'hint', 'vocab'),
+      c('forest-fox', 'Rusty', '🦊', 'rare', 'power', 'math'),
+      c('forest-deer', 'Antlers', '🦌', 'rare', 'xp', 'spelling'),
+      c('forest-unicorn', 'Glimmer', '🦄', 'epic', 'hint', 'vocab'),
+      c('forest-fairy', 'Pip', '🧚', 'ultra', 'buddy', 'spelling'),
+      c('forest-dragon', 'Old Mossback', '🐉', 'ultra', 'power', 'math'),
     ],
   },
 ];
