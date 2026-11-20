@@ -16,6 +16,7 @@ import {
   pickPracticeWord, entryWarnings, cleanEntries,
 } from './profile.js';
 import { load, save, requestPersistence, exportBackup, parseBackup } from './storage.js';
+import { createVocab, VOCAB_SCREENS } from './vocab-ui.js';
 import { sayWord, saySentence, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged, unlockAudio, preloadSpeech, sayBuiltIn } from './speech.js';
 import { getKey, setKey, listVoicesOrDefaults, prepareClips, countReady, clipSpecs, clipsForWord, sentenceClip, pruneClips, charCount, clearClips, generateClip } from './aivoice.js';
 import { voiceQuality } from './voices.js';
@@ -25,7 +26,7 @@ import { GAME_TYPES, GAME_TYPE_IDS } from './games.js';
 import { initMath } from './mathgame.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-20.1';
+const APP_VERSION = '2026-11-20.2';
 const app = document.getElementById('app');
 let data = load();
 for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
@@ -155,7 +156,8 @@ const screens = {
       }
       <div class="game-pick">
         <button class="big" data-action="play" ${p.words.length ? '' : 'disabled'}>⚔️ Spelling</button>
-        <button class="big" data-action="go" data-to="math">🔢 Times tables</button>
+        <button class="big secondary" data-action="go" data-to="math">🔢 Times tables</button>
+        ${vocab.hubButton(p)}
       </div>
       <div class="card">${superProgressHtml(p)}</div>
       <div class="menu">
@@ -443,7 +445,8 @@ const screens = {
           <p class="small muted">Mastery is a 0–${MAX_BOX} star rating. Each correct answer adds a star, with waits that grow from minutes to a week, so a word takes about a week to master. A miss starts it over.
             🔊 plays a word the way the kids hear it. ✕ deletes a word completely (for typos), stars and all. Coins and cards already earned stay.</p>
           <p class="small muted preview-status"></p>
-        </div>`
+        </div>
+        ${vocab.parentHtml(kid)}`
           : ''
       }
       <div class="card small">
@@ -962,6 +965,14 @@ const actions = {
   },
 };
 
+// Word Match (vocabulary) lives in its own module and plugs in here.
+const vocab = createVocab({
+  app, ui, esc, profile, update, go, render, floatText, heroHtml, starsHtml, superProgressHtml,
+  itemEmoji: (id) => ITEMS_BY_ID[id]?.emoji,
+  parentKid: () => data.profiles[ui.parentKid],
+});
+Object.assign(screens, vocab.screens);
+Object.assign(actions, vocab.actions);
 // Times tables game: its own screens and actions (src/mathgame.js).
 const math = initMath({ ui, profile, update, go, render, esc, heroHtml, topbar, floatText, superProgressHtml, data: () => data });
 Object.assign(screens, math.screens);
@@ -1080,7 +1091,7 @@ const cancelHold = () => {
 
 // ---------- render ----------
 function render(opts = {}) {
-  if (['hub', 'play', 'summary', 'packs', 'book', 'locker', 'words', 'math', 'math-play', 'math-summary', 'math-facts'].includes(ui.screen) && !profile()) ui.screen = 'home';
+  if (['hub', 'play', 'summary', 'packs', 'book', 'locker', 'words', 'math', 'math-play', 'math-summary', 'math-facts', ...VOCAB_SCREENS].includes(ui.screen) && !profile()) ui.screen = 'home';
   if (ui.screen === 'play' && app.dataset.screen === 'play') {
     patchPlay(opts);
   } else {
