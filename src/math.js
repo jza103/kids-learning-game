@@ -7,6 +7,7 @@ import { learnRewards } from './sunshine.js';
 import { claimLegends } from './legend.js';
 import { XP_PER, applyXpBoost } from './progress.js';
 
+const DAY_MS = 864e5;
 export const GAME_TYPE = 'math';
 export const MAX_FACTOR = 12;
 export const OPS = {
@@ -54,6 +55,11 @@ export const FACTS_PER_SUPER_STEP = 2;
 // credit and the times-table totals only count facts with both numbers 3-12.
 export const WARMUP_MAX = 2;
 export const WARMUP_MAX_BOX = 2;
+// A warm-up at its star cap rests this long before Smart mix asks it again
+// (they are 125 of the 325 facts, and 0, 1 and 2 facts need little practice).
+// It used to come back daily at a high pick weight, so about 45% of a daily
+// player's math answers all year were warm-ups (sim/, 2026-11-20).
+export const WARMUP_REST_DAYS = 30;
 export function isWarmup(fact) {
   return fact.op === 'mul' ? Math.min(fact.a, fact.b) <= WARMUP_MAX : Math.min(fact.b, fact.answer) <= WARMUP_MAX;
 }
@@ -120,10 +126,14 @@ export const itemFor = (state, factId, now) => state.srs[factId] || newItem(fact
 /**
  * Choose the next fact. Uses the spelling scheduler's weights (missed and
  * low-star facts come up more); after MAX_NEW_PER_ROUND new facts, only
- * facts already seen, unless there aren't any.
+ * facts already seen, unless there aren't any. Warm-ups resting at their
+ * 2-star cap are left out while there are other facts to ask.
  */
 export function pickFact(state, pool, now, rng = Math.random, recent = [], newUsed = 0) {
   let items = pool.map((f) => itemFor(state, f.id, now));
+  // Warm-ups resting at their star cap only come up when there's little else.
+  const working = items.filter((i) => !(i.box >= WARMUP_MAX_BOX && i.dueAt > now && isWarmup(factById(i.id))));
+  if (working.length >= 3) items = working;
   if (newUsed >= MAX_NEW_PER_ROUND) {
     const seen = items.filter((i) => i.seen > 0);
     if (seen.length >= 3) items = seen;
@@ -187,7 +197,7 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
   let coins;
   if (srsResult === 'correct' && warmup && before.box >= WARMUP_MAX_BOX) {
     // Warm-ups stop at WARMUP_MAX_BOX stars.
-    after = { ...before, seen: before.seen + 1, correct: before.correct + 1, lastResult: 'correct', dueAt: now + INTERVALS[before.box] };
+    after = { ...before, seen: before.seen + 1, correct: before.correct + 1, lastResult: 'correct', dueAt: now + WARMUP_REST_DAYS * DAY_MS };
     coins = 0;
   } else if (srsResult === 'correct' && practice && before.box >= PRACTICE_MAX_BOX) {
     // Practice can't take a fact past PRACTICE_MAX_BOX stars: keep the box, reschedule.
@@ -197,12 +207,13 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
     // Every in-time right answer adds a star, even before the fact is due:
     // a kid who aces the facts in one week has earned it (Jason, 2026-11-20).
     // Repeating a fact early still pays little, so coins can't be ground.
-    after = review(before, srsResult, now);
+    after = review(before, srsResult, now, { daily: false });
     coins = srsResult === 'correct' && !due ? NOT_DUE_COINS : coinsForAnswer(before, srsResult);
   }
   if (warmup) {
     coins = 0;
     after = { ...after, box: Math.min(after.box, WARMUP_MAX_BOX), masteredAt: before.masteredAt ?? null };
+    if (srsResult === 'correct' && after.box >= WARMUP_MAX_BOX) after.dueAt = Math.max(after.dueAt, now + WARMUP_REST_DAYS * DAY_MS);
   }
   if (ms != null && (result === 'correct' || result === 'slow')) after = withSolveTime(after, ms);
   const mastered = before.masteredAt == null && after.masteredAt != null;

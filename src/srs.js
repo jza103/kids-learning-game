@@ -1,6 +1,6 @@
 // Leitner-style spaced repetition. Boxes 0..MAX_BOX; a correct answer moves an
 // item up one box (longer wait), a miss sends it back to box 0.
-import { weightedPick } from './rng.js';
+import { weightedPick, dayKey } from './rng.js';
 
 const MIN = 60 * 1000;
 const DAY = 24 * 60 * MIN;
@@ -34,6 +34,13 @@ export function needsRefresh(item, now = Date.now()) {
   return Boolean(item) && item.box >= MAX_BOX && item.dueAt <= now;
 }
 
+// --- Star rules (tuning knobs; the sim in sim/ flips them to compare) ---
+// dailyFrom: once a word has this many stars, it earns at most one more star
+//   a day (null = no limit). Rewards spaced practice over one-day cramming.
+//   Math opts out (review(..., { daily: false })): Jason, no cap on facts.
+// missDrop: stars lost on a miss (MAX_BOX = back to 0, the classic Leitner rule).
+export const STAR_RULES = { dailyFrom: null, missDrop: MAX_BOX };
+
 export function newItem(id, now) {
   return { id, box: 0, dueAt: now, seen: 0, correct: 0, misses: 0, lastResult: null, masteredAt: null };
 }
@@ -42,16 +49,25 @@ export function newItem(id, now) {
  * Record an answer. result is 'correct', 'wrong' or 'assisted' (answered
  * correctly after using a hint). Returns a new item; does not mutate.
  */
-export function review(item, result, now) {
+export function review(item, result, now, { daily = true } = {}) {
   const next = { ...item, seen: item.seen + 1, lastResult: result };
+  const today = dayKey(now);
+  const waitForTomorrow = daily && STAR_RULES.dailyFrom != null && item.box >= STAR_RULES.dailyFrom && item.box < MAX_BOX && item.starDay === today;
+  if (result === 'correct' && waitForTomorrow) {
+    // Already earned a star today: right answers still count, the star waits.
+    next.correct = item.correct + 1;
+    next.dueAt = Math.max(item.dueAt, now + INTERVALS[0]);
+    return next;
+  }
   if (result === 'correct') {
     next.box = Math.min(item.box + 1, MAX_BOX);
     next.correct = item.correct + 1;
+    if (next.box > item.box) next.starDay = today;
   } else if (result === 'assisted') {
     // A hinted answer doesn't prove recall: keep the box, ask again soon.
     next.box = item.box;
   } else {
-    next.box = 0;
+    next.box = Math.max(0, item.box - STAR_RULES.missDrop);
     next.misses = item.misses + 1;
   }
   if (result === 'correct' && item.box >= MAX_BOX && item.dueAt <= now) next.refreshes = (item.refreshes || 0) + 1;

@@ -5,6 +5,8 @@
   "description": "Offline iPad PWA: weekly spelling practice with spaced repetition inside a collecting game.",
   "scripts": {
     "test": "node --test",
-    "start": "python3 -m http.server 8080"
+    "start": "python3 -m http.server 8080",
+    "sim": "node sim/run.js",
+    "sim:exploits": "node sim/exploits.js"
   }
 }

@@ -53,6 +53,25 @@ test('a fully mastered week list earns a Week Star; every 4 Week Stars earn a sp
   assert.deepEqual(legends.map((l) => l.id), [LEGENDS.find((l) => l.track === 'spelling').id]);
 });
 
+test('finishing last week\'s list after a new list arrives still earns its Week Star', () => {
+  let p = newProfile('A', T0);
+  let now = T0;
+  const old = ['ant', 'bee', 'cow', 'dog', 'eel'];
+  p = addWords(p, parseWordList(old.join('\n')), now).profile;
+  for (const id of old.slice(0, 4)) for (let k = 0; k < MAX_BOX; k++) p = recordAnswer(p, id, 'correct', (now += 1000)).profile;
+  now = T0 + WEEK;
+  p = addWords(p, parseWordList('fox\ngnu\nhen\nibis\njay'), now).profile;
+  assert.equal((p.weekStars || []).length, 0);
+  let star = false;
+  for (let k = 0; k < MAX_BOX; k++) {
+    const r = recordAnswer(p, 'eel', 'correct', (now += 1000));
+    p = r.profile;
+    star ||= r.weekStar;
+  }
+  assert.ok(star);
+  assert.deepEqual(p.weekStars, [T0]);
+});
+
 test('a short list (fewer than the minimum words) earns no Week Star', () => {
   let p = addWords(newProfile('A', T0), parseWordList('cat\ndog'), T0).profile;
   let now = T0;

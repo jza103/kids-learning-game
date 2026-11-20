@@ -115,7 +115,8 @@ export function addWords(profile, entries, now) {
 /**
  * Delete a word completely (e.g. a typo): it leaves the bank and its stars and
  * history are erased, so adding it again starts fresh. Coins, cards and packs
- * already earned are kept.
+ * already earned are kept, and a word that was mastered doesn't pay its
+ * mastery rewards again.
  */
 export function removeWord(profile, wordId) {
   const srs = { ...profile.srs };
@@ -126,6 +127,8 @@ export function removeWord(profile, wordId) {
     words: profile.words.filter((w) => w.id !== wordId),
     srs,
     masteredWords: Math.max(0, (profile.masteredWords || 0) - (wasMastered ? 1 : 0)),
+    // Remembered so adding the word back doesn't pay its mastery rewards twice.
+    masteryPaid: wasMastered ? [...new Set([...(profile.masteryPaid || []), wordId])] : profile.masteryPaid,
   };
 }
 
@@ -203,7 +206,7 @@ export function recordAnswer(profile, wordId, result, now, powers = { xp: 0 }) {
   const paid = earnCoins(profile, coinsForAnswer(before, result), now);
   const coins = paid.coins;
   const after = review(before, result, now);
-  const mastered = before.masteredAt == null && after.masteredAt != null;
+  const mastered = before.masteredAt == null && after.masteredAt != null && !(profile.masteryPaid || []).includes(wordId);
   const xp = applyXpBoost(XP_PER[result] + (mastered ? XP_PER.mastered : 0), powers);
   let next = {
     ...paid.profile,

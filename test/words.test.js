@@ -227,3 +227,22 @@ test('entries from the word form are tidied, blanks and repeats dropped', () => 
   ]);
   assert.deepEqual(parseWordList('because | I stayed in.\nfriend'), out);
 });
+
+test('a mastered word that is deleted and added again does not pay its mastery twice', () => {
+  const T = Date.UTC(2026, 10, 20, 15);
+  let p = addWords(newProfile('A', T), parseWordList('cat'), T).profile;
+  let now = T;
+  const master = () => {
+    let paid = 0;
+    for (let k = 0; k < MAX_BOX; k++) {
+      const r = recordAnswer(p, 'cat', 'correct', (now += 1000));
+      p = r.profile;
+      if (r.mastered) paid++;
+    }
+    return paid;
+  };
+  assert.equal(master(), 1);
+  p = addWords(removeWord(p, 'cat'), parseWordList('cat'), now).profile;
+  assert.equal(master(), 0);
+  assert.equal(p.masteredWords, 0, 'the count drops with the delete and is not paid back');
+});

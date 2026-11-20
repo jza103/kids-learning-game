@@ -22,17 +22,33 @@ export function masteredVocabCount(profile) {
   return Object.values(profile.vocab?.srs || {}).filter((i) => i.masteredAt != null).length;
 }
 
-/** This week's list, if it's big enough and every word on it has been mastered. */
-export function weekListDone(profile) {
-  const words = (profile.words || []).filter((w) => w.batch === profile.currentBatch);
-  return words.length >= LEGEND_RULES.minWeekWords && words.every((w) => masteredIn(profile.srs, w.id));
+/** Lists (by batch) that are big enough and have every word mastered. */
+export function doneLists(profile) {
+  const byBatch = new Map();
+  for (const w of profile.words || []) {
+    if (w.batch == null) continue;
+    if (!byBatch.has(w.batch)) byBatch.set(w.batch, []);
+    byBatch.get(w.batch).push(w);
+  }
+  return [...byBatch].filter(([, words]) => words.length >= LEGEND_RULES.minWeekWords && words.every((w) => masteredIn(profile.srs, w.id))).map(([b]) => b);
 }
 
-/** Award a Week Star for the current list once it's all mastered (kept forever). */
+/** This week's list, if it's big enough and every word on it has been mastered. */
+export function weekListDone(profile) {
+  return doneLists(profile).includes(profile.currentBatch);
+}
+
+/**
+ * Award a Week Star for each list that's all mastered (kept forever). Any
+ * week's list counts, not just the current one, so a kid who finishes last
+ * week's words during review still gets the star (the sim showed daily
+ * players missing most stars while weekend crammers got all of them).
+ */
 export function claimWeekStar(profile) {
   const stars = profile.weekStars || [];
-  if (profile.currentBatch == null || stars.includes(profile.currentBatch) || !weekListDone(profile)) return { profile, star: false };
-  return { profile: { ...profile, weekStars: [...stars, profile.currentBatch] }, star: true };
+  const fresh = doneLists(profile).filter((b) => !stars.includes(b));
+  if (!fresh.length) return { profile, star: false };
+  return { profile: { ...profile, weekStars: [...stars, ...fresh] }, star: true };
 }
 
 export function eligibleLegends(profile) {
