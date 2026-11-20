@@ -1,7 +1,7 @@
 // Offline support: precache the app shell, then serve from cache and refresh
 // the cache in the background (stale-while-revalidate), so updates show up on
 // the next launch. Bump VERSION when adding or removing files.
-const VERSION = 'v9';
+const VERSION = 'v10';
 const CACHE = `spelling-${VERSION}`;
 const SHELL = [
   './',
@@ -26,6 +26,9 @@ const SHELL = [
   './src/vocab.js',
   './src/vocab-ui.js',
   './src/vocab-words.js',
+  './src/games.js',
+  './src/friends.js',
+  './src/friendsui.js',
 ];
 
 self.addEventListener('install', (event) => {

@@ -3,7 +3,9 @@
 import { MONSTERS } from './content.js';
 import { masteryRating, masterySummary, MAX_BOX } from './srs.js';
 import { MASTERY_COINS } from './economy.js';
-import { XP_PER, applyXpBoost, levelForXp, teamPowers } from './progress.js';
+import { XP_PER, applyXpBoost, levelForXp } from './progress.js';
+import { teamPowersFor, friendsAfterAnswer } from './friends.js';
+import { teamLineHtml, friendSummaryHtml } from './friendsui.js';
 import { newBattle, applyAnswer } from './battle.js';
 import { sayWord, sayBuiltIn, unlockAudio } from './speech.js';
 import {
@@ -14,8 +16,8 @@ import {
 
 export const VOCAB_SCREENS = ['vocab', 'vocab-summary'];
 
-// Team powers for Word Match. One place to change when friends get specialties.
-const powersFor = (p) => teamPowers(p.team);
+// Only friends who know Word Match (by specialty or by learning it) give powers here.
+const powersFor = (p) => teamPowersFor(p, 'vocab');
 
 export function createVocab(ctx) {
   const { app, ui, esc } = ctx;
@@ -37,6 +39,8 @@ export function createVocab(ctx) {
       mastered: [],
       earned: { coins: 0, xp: 0, matches: 0, firstTry: 0 },
       startLevel: levelForXp(p.xp),
+      friendsBefore: p,
+      friendEvents: [],
     };
     nextBoard();
   }
@@ -97,8 +101,11 @@ export function createVocab(ctx) {
     if (firstTry) {
       b.tried.push(wordId);
       const result = correct ? 'correct' : 'wrong';
-      rec = recordMatch(ctx.profile(), wordId, result, Date.now(), s.powers);
-      let p = rec.profile;
+      const now = Date.now();
+      rec = recordMatch(ctx.profile(), wordId, result, now, s.powers);
+      const grown = friendsAfterAnswer(rec.profile, 'vocab', result, now);
+      s.friendEvents.push(...grown.events);
+      let p = grown.profile;
       s.earned.coins += rec.coins;
       s.earned.xp += rec.xp;
       const out = applyAnswer(s.battle, result, s.powers);
@@ -242,7 +249,7 @@ export function createVocab(ctx) {
       const p = ctx.profile();
       return `${topHtml()}
         ${s.phase === 'intro' ? introHtml() : boardHtml()}
-        <p class="small muted" style="text-align:center">Team: ${p.team.length ? p.team.map((id) => ctx.itemEmoji(id)).join(' ') : 'none yet. Add friends from your collection for powers!'}</p>`;
+        <p class="small muted" style="text-align:center">${teamLineHtml(p, 'vocab')}</p>`;
     },
     'vocab-summary'() {
       const s = g();
@@ -260,6 +267,7 @@ export function createVocab(ctx) {
           ${ctx.superProgressHtml(p)}
           ${s.levelUp ? `<p style="font-size:1.3rem"><strong>Level up! You're level ${levelForXp(p.xp)}.</strong> Check the Locker for new stuff.</p>` : ''}
         </div>
+        ${friendSummaryHtml(s.friendsBefore, p, s.friendEvents)}
         ${
           missed.length
             ? `<div class="card"><h3>Words to keep learning</h3>
