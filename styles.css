@@ -172,6 +172,66 @@ table.check td { vertical-align: top; }
 @media (max-width: 600px) {
   .entry { grid-template-columns: minmax(0, 1fr) auto; }
   .entry [name=sentence] { grid-column: 1 / -1; grid-row: 2; }
+
+/* Times tables */
+.game-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.game-pick > button { width: 100%; margin: 0 !important; }
+.op-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mode-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.mode-pick button { line-height: 1.2; }
+.mode-pick .small { font-weight: 600; margin-top: 4px; font-size: .85rem; }
+.chips { gap: 8px; }
+.chip { min-height: 48px; min-width: 48px; padding: 8px 10px; background: var(--card); color: var(--ink); border: 3px solid var(--line); }
+.chip.wide { padding: 8px 14px; }
+.chip.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, white); }
+.math-card { padding-top: 12px; }
+.timer { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; margin-bottom: 12px; }
+.timer.off { visibility: hidden; }
+.timer > div { height: 100%; width: 100%; background: var(--good); transform-origin: left; animation: drain linear forwards; }
+.timer.late > div { background: #f5a524; }
+@keyframes drain { from { transform: scaleX(1) } to { transform: scaleX(0) } }
+.fact { font-size: 3rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.fact.small-fact { font-size: 2rem; }
+.slot { display: inline-block; min-width: 2.2em; padding: 0 .2em; border-bottom: 4px solid var(--accent); color: var(--accent); }
+.correct-fact { font-size: 2.6rem; font-weight: 800; text-align: center; color: var(--good); }
+.your-answer { text-align: center; color: var(--muted); font-size: .95rem; text-decoration: line-through; text-decoration-color: rgba(107, 102, 128, .5); }
+.math-hint { text-align: center; color: var(--muted); font-size: 1.1rem; margin-top: 8px; }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 420px; margin: 0 auto; }
+.keypad button { font-size: 1.8rem; min-height: 64px; padding: 8px; }
+.fact-grid { display: grid; grid-template-columns: repeat(14, 1fr); gap: 2px; }
+.fc { font-size: .72rem; font-weight: 700; text-align: center; padding: 5px 0; border-radius: 4px; font-variant-numeric: tabular-nums; }
+.fc.head { color: var(--muted); }
+.fc-key { display: inline-block; padding: 2px 8px; border-radius: 6px; margin: 2px; font-weight: 700; font-size: .8rem; }
+.fc.new, .fc-key.new { background: #f1eff7; color: #aaa4bd; }
+.fc.b0, .fc-key.b0 { background: #ffd9d9; }
+.fc.b1, .fc-key.b1 { background: #ffe6c7; }
+.fc.b2, .fc-key.b2 { background: #fff1b8; }
+.fc.b3, .fc-key.b3 { background: #dff5d0; }
+.fc.b4, .fc-key.b4 { background: #b9ebb0; }
+.fc.b5, .fc-key.b5 { background: #f5c542; }
+@media (max-width: 600px) {
+  .fact { font-size: 2.4rem; }
+  .correct-fact { font-size: 2rem; }
+  .keypad button { min-height: 56px; font-size: 1.6rem; }
+  .op-pick .icon { font-size: 1.6rem; }
+  .op-pick button { min-height: 84px; padding: 8px; }
+  .mode-pick button.big, .game-pick button.big { font-size: 1.2rem; padding: 14px 10px; }
+  .arena .monster { font-size: 56px; }
+  .fc { font-size: .6rem; padding: 4px 0; }
+}
+/* Phones: keep the whole question, answer and keypad on one screen. */
+@media (max-width: 600px) {
+  [data-screen="math-play"] .topbar { margin-bottom: 4px; }
+  [data-screen="math-play"] .arena { margin: 0 0 8px; }
+  [data-screen="math-play"] .arena .monster { font-size: 48px; }
+  [data-screen="math-play"] .zap { font-size: 30px; }
+  [data-screen="math-play"] .math-card { padding: 10px 12px; margin-bottom: 8px; }
+  [data-screen="math-play"] .feedback { min-height: 1.5em; margin: 6px 0; font-size: 1.1rem; }
+  [data-screen="math-play"] .timer { margin-bottom: 6px; }
+  [data-screen="math-play"] .keypad { gap: 8px; }
+  [data-screen="math-play"] .keypad button { min-height: 52px; }
+  [data-screen="math-play"] .fact.small-fact { font-size: 1.6rem; }
+  [data-screen="math-play"] .correct-fact { font-size: 1.8rem; }
 }
 
 /* Word Match (vocabulary) */

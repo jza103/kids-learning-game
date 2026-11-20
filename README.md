@@ -1,6 +1,6 @@
 # Kids Learning Game (working title)
 
-**Status:** spelling game live on GitHub Pages; word bank, mastery rewards and voice picker added
+**Status:** spelling game and times tables game live on GitHub Pages
 **Created:** 2026-11-17  **Last updated:** 2026-11-20
 
 _Moved from the `jza103/ideas` incubator repo on 2026-11-19._
@@ -29,6 +29,15 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - **Friends grow** (`src/friends.js`, 2026-11-20): each friend specializes in spelling, math or vocab, and its power only works in games it knows. Team friends get XP from answers (capped daily), level up, and evolve into ✨ Super Friends (level 5) and 💖 Best Friends (level 10), getting stronger. A friend brought to a game it doesn't know learns it over about a week of play. Other games plug in with `teamPowersFor` and `friendsAfterAnswer` (see `src/games.js`). Pacing math: `docs/friends-pacing.md`.
 - **XP / Locker:** cosmetic only (hero, hat, color, title).
 
+## How the times tables game works
+- **Facts:** × and ÷ tables 0–12 (169 × facts, 156 ÷ facts, no ÷0). Each fact has its own 0–5 star rating, using the same scheduler as spelling words (`src/math.js`, stored in `profile.math`).
+- **Modes:** Multiply, Divide, and Mixed (advanced). Kids pick "Smart mix" or any single table. Smart mix starts with 0, 1, 2, 10, 5 and opens the next table when 80% of open facts have 2+ stars. At most 5 new facts per round.
+- **Practice vs Speed:** Practice has no timer, pays half coins and XP, and can take a fact only up to 3 stars. Speed gives a time per question (6 s default; the grown-ups screen offers 4–15 s). A right answer in time adds a star; a right answer after the timer still hits the monster but counts like a hinted answer (no star, half coins). So 5 stars means fast recall.
+- **Anti-grind:** answering a fact before it's due pays 2 coins and adds no star. Mastering a fact pays 15 coins once, and every 2 mastered facts fill one Super Pack dot (shared with spelling).
+- **Play:** 12-question monster battle with an on-screen number pad (keyboard digits and Enter work on a computer). A miss shows the right fact big and what the kid typed small and crossed out, then they type the answer once to lock it in. Hint = a skip-counting clue.
+- **Friend hooks:** `mathPowers()` and `afterMathAnswer()` at the top of `src/mathgame.js` are where game-type-aware friend powers plug in.
+- **Kid view:** "My facts" shows color-coded × and ÷ charts. Grown-ups screen shows mastered facts per table, tricky facts and the timer setting.
+
 ## How Word Match (vocabulary) works
 - **Game:** tap a word, then tap what it means. No typing. A round is 3 boards of 4 words, each with one extra meaning so the last match isn't a free guess. Matches hit the same monsters as spelling. New words get a quick "New words!" card first and come in at most 6 per round. Works on iPhone (words in a 2×2 grid above the meanings), iPad and desktop (side by side).
 - **Words:** each kid starts with 44 third-grade starter words (`src/vocab-words.js`, no synonym pairs so boards stay fair). Grown-ups add words with separate Word and Meaning boxes, ✎ edits, ✕ deletes, and "Put back deleted starter words" restores them. Words the parent adds come in before the remaining starter words.
@@ -53,14 +62,15 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - **Randomized rewards: decided (2026-11-19)** after Jason tested Blooket with the kids: collectibles with rarity via packs, kept mild. Odds shown, pity guarantees, duplicates → shards, daily cap, kid picks a theme, collectibles give in-game powers and fill a collection book, coins only from correct answers (missed words pay more, mastered less), parent writes the content. Background in `appeal-analysis.md`.
 
 ## Where we left off
-- Last done (2026-11-19): went live on GitHub Pages; added the growing word bank with mastery stars, Super Packs and ElevenLabs voice. Then, from Jason's listening: spelling-test context for AI clips, a live check of typed words with tips and a 🔊 preview per word, and ✕ now deletes a word completely (stars and audio). After the first playtest (iPhone): a miss shows the kid's attempt small and struck through under the correct spelling, and the grown-ups form has a word box plus an optional sentence box per word instead of the `|` syntax. Every way of adding words goes through `cleanEntries` in `src/profile.js`; `parseWordList` (pasted lists with `|`) is kept for bulk loading later.
+- Last done (2026-11-20): times tables game (× ÷ mixed, practice and speed modes, per-fact mastery). Checked at iPhone, iPad and desktop sizes in a headless browser.
+- Before that (2026-11-19): went live on GitHub Pages; added the growing word bank with mastery stars, Super Packs and ElevenLabs voice. Then, from Jason's listening: spelling-test context for AI clips, a live check of typed words with tips and a 🔊 preview per word, and ✕ now deletes a word completely (stars and audio). After the first playtest (iPhone): a miss shows the kid's attempt small and struck through under the correct spelling, and the grown-ups form has a word box plus an optional sentence box per word instead of the `|` syntax. Every way of adding words goes through `cleanEntries` in `src/profile.js`; `parseWordList` (pasted lists with `|`) is kept for bulk loading later.
 - 2026-11-20: added Word Match, a tap-to-match vocabulary game with 44 starter words and a Word/Meaning editor on the grown-ups screen.
 - Also (2026-11-20): friend specialties, XP, evolution and learning new games, with daily caps (`docs/friends-pacing.md`). Math and vocab games are being built in parallel and call the same friend hooks.
 - Next:
   0. Jason: try friends with the kids; tune pacing numbers in `src/friends.js` if it's too slow or too fast.
   1. Jason: listen to the re-made clips; if a word still sounds odd, tune `WORD_CONTEXT`/`VOICE_SETTINGS` in `src/aivoice.js`.
   2. Play with the kids and tune the numbers in `src/economy.js`, `src/profile.js` (review mix) and `src/progress.js`.
-  3. Math facts mode (same item model and scheduler).
+  3. Play-test the times tables: is 6 s right? Is Smart mix opening tables at a good pace?
 - Open questions:
   - iOS PWA storage eviction: backup/restore exists on the grown-ups screen; is that enough?
   - Curriculum file format once downloaded, and how to map it to item banks.
@@ -68,6 +78,7 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 ## Key files
 - `index.html`, `styles.css`, `src/app.js` — the app UI
 - `src/srs.js`, `src/economy.js`, `src/progress.js`, `src/battle.js`, `src/profile.js` — game and learning logic (pure, tested in `test/`)
+- `src/math.js`, `src/mathgame.js` — times tables logic (tested in `test/math.test.js`) and UI
 - `src/content.js` — collectibles (with specialty), monsters, cosmetics
 - `src/games.js`, `src/friends.js`, `src/friendsui.js` — game types, friend growth logic, shared friend UI snippets
 - `src/voices.js`, `src/speech.js`, `src/aivoice.js` — built-in voice ranking, speech playback, ElevenLabs audio
