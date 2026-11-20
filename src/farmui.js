@@ -8,7 +8,7 @@ import {
   STATIONS, STATION_IDS, visitFarm, farmLevelProgress, xpLeftToday, slotsFor, stationOf, workPower, stationSpeed, stationPower,
   crewElements, buildDiscount, assignCrew, removeCrew, openCrops, openRecipes, plant, plotReady, harvestAll, fertilize,
   ownedCritters, penSpace, goodyCycles, collectGoodies, befriendCost, befriend, waveBye, hatchEgg, forageWaiting, collectForage,
-  startCraft, canCraft, collectCraft, fillRequest, skipRequest, requestPay, sell, plotCost, nextPenCost, buyPlot, buyPen,
+  startCraft, canCraft, collectCraft, craftProfit, fillRequest, skipRequest, requestPay, sell, plotCost, nextPenCost, buyPlot, buyPen,
   biomeBlock, biomeCost, openBiome, decorCost, buyDecor, journalProgress, perkUsesLeft, usePerk, canGift, sendGift, farmLocked,
   FERTILIZER_SHARDS, GIFT_MAX, FARM_XP_PER_DAY, sunLeft, sunJar, pourSun, sunToFinish, sunUseful, sunToNext, goldenSeason, MORNING_RAIN, GOODY_SUN,
   FORAGE_PER_POWER_SUN, expeditionSlots, biomeOpen, benchFriends, needsMet, fitsNeed, sendExpedition, collectExpedition, welcomeExplorer,
@@ -220,11 +220,14 @@ export function initFarm(ctx) {
     const f = p.farm;
     const w = f.workshop;
     let body;
-    if (w && plotReady(w)) body = `<button data-action="farm-craft-done">${g(w.recipe).emoji} Collect ${esc(g(w.recipe).name)}</button>`;
+    if (w && plotReady(w)) body = `<div class="row"><button data-action="farm-craft-done" data-sell="1">${g(w.recipe).emoji} Sell ${esc(g(w.recipe).name)} for 🔔 ${g(w.recipe).value}</button>
+      <button class="secondary" data-action="farm-craft-done">Keep it</button></div>`;
     else if (w) body = `<p>Making ${g(w.recipe).emoji} ${esc(g(w.recipe).name)}: needs ${sunLeft(w, stationSpeed(p, 'workshop'))} more ☀️.</p>`;
     else body = `<div class="recipes">${openRecipes(f).map((r) => `<button class="secondary recipe" data-action="farm-craft" data-id="${r.id}" ${canCraft(f, r) ? '' : 'disabled'}>
-        <span class="big-emoji">${r.emoji}</span><div><strong>${esc(r.name)}</strong><div class="small">${Object.entries(r.needs).map(([id, n]) => `${n}${g(id).emoji}`).join(' ')} · ☀️${r.sun} · 🔔${r.value}</div></div></button>`).join('')}</div>`;
-    return `<div class="card"><h3>🔨 Workshop</h3>${body}${crewLine(p, 'workshop')}</div>`;
+        <span class="big-emoji">${r.emoji}</span><div><strong>${esc(r.name)}</strong><div class="small">${Object.entries(r.needs).map(([id, n]) => `${n}${g(id).emoji}`).join(' ')} · ☀️${r.sun}</div><div class="small">Sells for 🔔 ${r.value} <span class="muted">(+${craftProfit(r)} more than the materials)</span></div></div></button>`).join('')}</div>`;
+    const shelf = RECIPES.filter((r) => f.items[r.id] > 0);
+    const shelfHtml = shelf.length ? `<div class="row" style="flex-wrap:wrap;margin-top:8px"><span class="small">On the shelf:</span>${shelf.map((r) => `<button class="small-btn secondary" data-action="farm-sell" data-id="${r.id}" data-n="${f.items[r.id]}">${r.emoji}×${f.items[r.id]} · sell 🔔 ${r.value * f.items[r.id]}</button>`).join('')}</div>` : '';
+    return `<div class="card"><h3>🔨 Workshop</h3><p class="small muted">Turn crops, goodies and finds into things worth lots of 🔔 Grove Bells. Crafting only uses materials and ☀️ Sunshine, never Bells. Sell right away, or keep it for a friend's request (they pay extra).</p>${body}${shelfHtml}${crewLine(p, 'workshop')}</div>`;
   }
 
   function farmTab(p, now) {
@@ -598,9 +601,10 @@ export function initFarm(ctx) {
       if (r?.found) floatText(`+ ${Object.entries(r.found).map(([id, n]) => `${n} ${g(id).emoji}`).join(' ')}`);
     },
     'farm-craft': (d) => act((p, now) => startCraft(p, d.id, now)),
-    'farm-craft-done': () => {
-      const r = act((p, now) => collectCraft(p, now));
-      if (r?.id) floatText(`${g(r.id).emoji} ${g(r.id).name}!`);
+    'farm-craft-done': (d) => {
+      const r = act((p, now) => collectCraft(p, now, { sellNow: Boolean(d.sell) }));
+      if (r?.bells) floatText(`${g(r.id).emoji} Sold! 🔔 +${r.bells}`);
+      else if (r?.id) floatText(`${g(r.id).emoji} ${g(r.id).name}!`);
     },
     'farm-pick': (d) => {
       ui.farm.pickFor = d.id || null;
