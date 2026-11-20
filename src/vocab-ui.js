@@ -37,7 +37,7 @@ export function createVocab(ctx) {
       recent: [],
       missed: new Set(),
       mastered: [],
-      earned: { coins: 0, xp: 0, matches: 0, firstTry: 0 },
+      earned: { coins: 0, xp: 0, sun: 0, matches: 0, firstTry: 0 },
       startLevel: levelForXp(p.xp),
       friendsBefore: p,
       friendEvents: [],
@@ -107,6 +107,7 @@ export function createVocab(ctx) {
       s.friendEvents.push(...grown.events);
       let p = grown.profile;
       s.earned.coins += rec.coins;
+      s.earned.sun += rec.sun || 0;
       s.earned.xp += rec.xp;
       const out = applyAnswer(s.battle, result, s.powers);
       events = out.events;
@@ -261,7 +262,7 @@ export function createVocab(ctx) {
       return `<h1>Matching done! 🧩</h1>
         <div class="card">
           <div class="row" style="font-size:1.3rem;gap:24px">
-            <span>🪙 +${s.earned.coins}</span><span>⭐ +${s.earned.xp} XP</span><span>🎯 ${s.earned.firstTry}/${s.battle.asked} first try</span><span>👾 ${s.battle.defeated} defeated</span>
+            <span>🪙 +${s.earned.coins}</span><span>⭐ +${s.earned.xp} XP</span>${s.earned.sun ? `<span>☀️ +${s.earned.sun}</span>` : ''}<span>🎯 ${s.earned.firstTry}/${s.battle.asked} first try</span><span>👾 ${s.battle.defeated} defeated</span>
           </div>
           ${mastered.length ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((w) => `“${esc(w.word)}”`).join(', ')}!</strong> +${MASTERY_COINS * mastered.length} 🪙</p>` : ''}
           ${ctx.superProgressHtml(p)}

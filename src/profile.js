@@ -4,6 +4,7 @@ import { newItem, review, isDue, pickNext } from './srs.js';
 import { coinsForAnswer, earnCoins, newPackState, rewardMastery } from './economy.js';
 import { claimLegends } from './legend.js';
 import { XP_PER, applyXpBoost } from './progress.js';
+import { learnRewards } from './sunshine.js';
 
 export function newProfile(name, now, id = `kid-${now.toString(36)}`) {
   return {
@@ -220,5 +221,7 @@ export function recordAnswer(profile, wordId, result, now, powers = { xp: 0 }) {
     const claimed = claimLegends(next);
     ({ profile: next, newly: legends, star: weekStar } = claimed);
   }
-  return { profile: next, coins, xp, mastered, legends, weekStar };
+  let sun, shards;
+  ({ profile: next, sun, shards } = learnRewards(next, before, result, now, { mastered }));
+  return { profile: next, coins, xp, mastered, legends, weekStar, sun, shards };
 }

@@ -1,12 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ALL_ITEMS, THEMES, LEGEND_ITEMS } from '../src/content.js';
-import { farmTrait, JOB_IDS, ELEMENT_IDS, CROPS, CRITTERS_BY_ID, GOODS_BY_ID, JOURNAL_PAGES, DECOR } from '../src/farm-content.js';
+import { ROUTES_BY_ID, farmTrait, JOB_IDS, ELEMENT_IDS, CROPS, CRITTERS_BY_ID, GOODS_BY_ID, JOURNAL_PAGES, DECOR } from '../src/farm-content.js';
 import {
   visitFarm, assignCrew, removeCrew, slotsFor, workPower, stationSpeed, plant, harvestAll, collectGoodies, befriend, befriendCost,
   collectForage, forageWaiting, startCraft, collectCraft, fillRequest, sell, buyPlot, buyPen, plotCost, openBiome, biomeBlock,
   buyDecor, usePerk, perkUsesLeft, hatchEgg, fertilize, sendGift, canGift, farmLocked, farmLevel, xpLeftToday,
-  FARM_XP_PER_DAY, XP_PER_LEVEL, OFFLINE_CAP, GOODY_MAX_CYCLES, FERTILIZER_SHARDS, BABY_PITY, START_BELLS, newFarm, journalProgress,
+  FARM_XP_PER_DAY, XP_PER_LEVEL, FORAGE_MAX_SUN, GOODY_MAX_CYCLES, FERTILIZER_SHARDS, BABY_PITY, START_BELLS, newFarm, journalProgress,
+  pourSun, goldenSeason, MORNING_RAIN, GOLDEN_MAX, sendExpedition, collectExpedition, benchFriends, needsMet, expeditionSlots, welcomeExplorer,
+  EXPEDITION_SUN, EXPEDITION_SHARDS,
 } from '../src/farm.js';
 import { newProfile } from '../src/profile.js';
 import { mulberry32 } from '../src/rng.js';
@@ -21,7 +23,9 @@ const findFriend = (pred) => [...ALL_ITEMS, ...LEGEND_ITEMS].find((i) => pred(fa
 function kid(friends = [], extra = {}) {
   return { ...newProfile('Kid', T0), collection: Object.fromEntries(friends.map((id) => [id, 1])), ...extra };
 }
-const open = (p, now = T0, seed = 1) => visitFarm(p, now, mulberry32(seed)).profile;
+const open = (p, now = T0, seed = 1) => ({ ...visitFarm(p, now, mulberry32(seed)).profile, sunJar: 0 });
+/** Pour n Sunshine into the farm. */
+const shine = (p, n) => pourSun({ ...p, sunJar: n }, n).profile;
 
 test('every friend has a farm trait, and the first 60 cover every job and element', () => {
   for (const i of [...ALL_ITEMS, ...LEGEND_ITEMS]) assert.ok(farmTrait(i.id), i.id);
@@ -72,16 +76,20 @@ test('crews: job match counts double and slots grow with farm level', () => {
   assert.deepEqual(p.farm.crew.workshop, []);
 });
 
-test('crops grow in real time; a matching element grower adds one to the harvest', () => {
+test('crops grow from Sunshine, not time; a matching element grower adds one to the harvest', () => {
   const carrotFriend = first5.find((i) => farmTrait(i.id).job === 'grower' && farmTrait(i.id).element === 'earth').id;
   let p = open(kid([carrotFriend]));
   p = plant(p, 0, 'carrot', T0);
-  assert.equal(harvestAll(p, T0 + 14 * MIN).harvested.length, 0);
-  let r = harvestAll(p, T0 + 15 * MIN);
+  assert.equal(harvestAll(p, T0 + 30 * DAY).harvested.length, 0, 'time alone grows nothing');
+  p = shine(p, 2);
+  assert.equal(harvestAll(p, T0).harvested.length, 0);
+  p = shine(p, 1);
+  let r = harvestAll(p, T0);
   assert.deepEqual(r.harvested, [{ id: 'carrot', n: 2 }]);
   p = assignCrew(p, carrotFriend, 'fields');
   p = plant(p, 1, 'carrot', T0);
-  r = harvestAll(p, T0 + 15 * MIN);
+  p = shine(p, 3);
+  r = harvestAll(p, T0);
   assert.deepEqual(r.harvested, [{ id: 'carrot', n: 3 }, { id: 'carrot', n: 3 }]);
   assert.throws(() => plant(p, 2, 'lettuce', T0), /not open/);
 });
@@ -95,7 +103,7 @@ test('wonder seeds come from mastery, once each, and grow wonder crops', () => {
   assert.equal(r.profile.farm.wonderSeeds, 2, 'not paid twice');
   p = plant(r.profile, 0, 'wonder', T0);
   assert.equal(p.farm.wonderSeeds, 1);
-  const h = harvestAll(p, T0 + HOUR);
+  const h = harvestAll(shine(p, 8), T0);
   assert.equal(GOODS_BY_ID[h.harvested[0].id].kind, 'wonder');
 });
 
@@ -103,7 +111,7 @@ test('the farm never touches coins, packs or the collection', () => {
   const p0 = kid(['ocean-fish'], { coins: 123, shards: 0 });
   let p = open(p0);
   p = plant(p, 0, 'carrot', T0);
-  p = harvestAll(p, T0 + HOUR).profile;
+  p = harvestAll(shine(p, 3), T0).profile;
   p = sell(p, 'carrot', 2).profile;
   assert.equal(p.coins, 123);
   assert.deepEqual(p.collection, p0.collection);
@@ -129,19 +137,18 @@ test('befriending a visitor costs its favorite crop, less with a matching tender
 
 test('critters make goodies, capped while away; babies are guaranteed by the pity count', () => {
   let p = open(kid([]));
-  p.farm = { ...p.farm, visitor: null, critters: { fluffle: { lastAt: T0 }, buzzby: { lastAt: T0 } } };
-  let r = collectGoodies(p, T0 + 3 * DAY, () => 0.99);
+  p.farm = { ...p.farm, visitor: null, critters: { fluffle: { at: 0 }, buzzby: { at: 0 } } };
+  p = shine(p, 100);
+  let r = collectGoodies(p, T0, () => 0.99);
   assert.equal(r.collected.wool, GOODY_MAX_CYCLES);
   assert.equal(r.collected.honey, GOODY_MAX_CYCLES);
   p = r.profile;
-  let now = T0 + 3 * DAY;
+  const now = T0;
   for (let i = 2; i < BABY_PITY; i++) {
-    now += 2 * HOUR;
-    p = collectGoodies(p, now, () => 0.99).profile;
+    p = collectGoodies(shine(p, 4), now, () => 0.99).profile;
     assert.equal(p.farm.visitor, null);
   }
-  now += 2 * HOUR;
-  r = collectGoodies(p, now, () => 0.99);
+  r = collectGoodies(shine(p, 4), now, () => 0.99);
   assert.deepEqual(r.profile.farm.visitor, { id: 'bumblefluff', baby: true });
   assert.equal(befriendCost(r.profile.farm), 0);
   p = buyPen({ ...r.profile, farm: { ...r.profile.farm, bells: 1000 } });
@@ -150,14 +157,14 @@ test('critters make goodies, capped while away; babies are guaranteed by the pit
   assert.ok(p.farm.critters.bumblefluff);
 });
 
-test('forage needs a crew and stops piling up after 8 hours', () => {
+test('forage needs a crew and stops piling up', () => {
   const g = first5.find((i) => i.rarity === 'common' && farmTrait(i.id).job === 'gatherer').id;
   let p = open(kid([g]));
-  assert.equal(forageWaiting(p, T0 + 5 * HOUR), 0);
+  assert.equal(forageWaiting(shine(p, 20)), 0);
   p = assignCrew(p, g, 'forage');
-  assert.equal(forageWaiting(p, T0 + 4 * HOUR), 4);
-  assert.equal(forageWaiting(p, T0 + 3 * DAY), (OFFLINE_CAP / HOUR) * 0.5 * 2);
-  const r = collectForage(p, T0 + 3 * HOUR, mulberry32(3));
+  assert.equal(forageWaiting(shine(p, 20)), 4);
+  assert.equal(forageWaiting(shine(p, 500)), FORAGE_MAX_SUN * 0.1 * 2);
+  const r = collectForage(shine(p, 15), T0, mulberry32(3));
   assert.equal(Object.values(r.found).reduce((a, b) => a + b, 0), 3);
   assert.ok(Math.abs(r.profile.farm.forageCarry) < 1e-9);
 });
@@ -167,8 +174,8 @@ test('workshop crafts take items and time', () => {
   p.farm = { ...p.farm, items: { corn: 2, honey: 1 } };
   p = startCraft(p, 'bread', T0);
   assert.deepEqual(p.farm.items, {});
-  assert.throws(() => collectCraft(p, T0 + 29 * MIN), /not ready/);
-  const r = collectCraft(p, T0 + 30 * MIN);
+  assert.throws(() => collectCraft(shine(p, 4), T0), /not ready/);
+  const r = collectCraft(shine(p, 5), T0);
   assert.equal(r.profile.farm.items.bread, 1);
 });
 
@@ -293,4 +300,132 @@ test('newFarm is plain JSON', () => {
   const f = newFarm(T0);
   assert.deepEqual(JSON.parse(JSON.stringify(f)), f);
   assert.ok(CROPS.length >= 10);
+});
+
+test('Morning Rain once a day; the Sun Jar pours into the farm clock', () => {
+  let r = visitFarm(kid([]), T0, mulberry32(1));
+  assert.equal(r.profile.sunJar, MORNING_RAIN);
+  r = visitFarm(r.profile, T0 + HOUR, mulberry32(1));
+  assert.equal(r.profile.sunJar, MORNING_RAIN, 'not twice in a day');
+  r = visitFarm(r.profile, T0 + DAY, mulberry32(1));
+  assert.equal(r.profile.sunJar, MORNING_RAIN * 2);
+  assert.throws(() => pourSun(r.profile), /plant something/);
+  let p = plant(r.profile, 0, 'carrot', T0);
+  p = pourSun(p).profile;
+  assert.equal(p.sunJar, MORNING_RAIN * 2 - 3, 'only what the carrot needs');
+  assert.equal(p.farm.clock, 3);
+  p = pourSun(p, 100).profile;
+  assert.equal(p.sunJar, 0);
+  assert.throws(() => pourSun(p), /empty/);
+});
+
+test('learning answers fill the Sun Jar (and refreshes pay shards)', async () => {
+  const { recordAnswer, addWords } = await import('../src/profile.js');
+  let p = addWords(newProfile('Kid', T0), [{ id: 'cat', word: 'cat', sentence: '' }], T0).profile;
+  p = recordAnswer(p, 'cat', 'wrong', T0).profile;
+  assert.equal(p.sunJar || 0, 0);
+  p = recordAnswer(p, 'cat', 'correct', T0 + MIN).profile;
+  assert.equal(p.sunJar, 2, 'getting a missed word right pays double');
+  const before = p.shards;
+  p = { ...p, srs: { ...p.srs, cat: { ...p.srs.cat, box: 5, masteredAt: T0, dueAt: T0 } } };
+  const r = recordAnswer(p, 'cat', 'correct', T0 + DAY);
+  assert.equal(r.shards, 2);
+  assert.equal(r.profile.shards, before + 2);
+});
+
+test('Golden Season: only when everything is mastered; then the farm grows on its own', async () => {
+  const { trackedFacts } = await import('../src/math.js');
+  const done = { box: 5, masteredAt: T0, dueAt: T0 + 30 * DAY };
+  const msrs = Object.fromEntries([...trackedFacts('mul'), ...trackedFacts('div')].map((f) => [f.id, done]));
+  const p = { ...kid([]), words: [{ id: 'cat' }], srs: { cat: done }, math: { srs: msrs }, vocab: { srs: { a: done } } };
+  assert.equal(goldenSeason(p, T0), true);
+  assert.equal(goldenSeason({ ...p, vocab: { srs: { a: done, b: { box: 2, masteredAt: null, dueAt: T0 } } } }, T0), false);
+  assert.equal(goldenSeason(p, T0 + 31 * DAY), false, 'a refresh is due');
+  assert.equal(goldenSeason(kid([]), T0), false);
+  let r = visitFarm(p, T0, mulberry32(1));
+  r = visitFarm({ ...r.profile, sunJar: 0 }, T0 + 2 * DAY, mulberry32(1));
+  assert.equal(r.profile.sunJar, MORNING_RAIN + GOLDEN_MAX);
+});
+
+test('expeditions: bench friends only, needs speed them up, rewards include shards and a story', () => {
+  const ids = first5.slice(0, 12).map((i) => i.id);
+  let p = open(kid(ids));
+  p = assignCrew(p, ids[0], 'fields');
+  assert.equal(benchFriends(p).includes(ids[0]), false);
+  assert.equal(p.farm.routes.list.length, 3);
+  const shortIdx = p.farm.routes.list.findIndex((r) => ROUTES_BY_ID[r.route].size === 'short');
+  assert.ok(shortIdx >= 0);
+  const team = benchFriends(p).slice(0, 3);
+  assert.throws(() => sendExpedition(p, shortIdx, team.slice(0, 2), T0), /pick 3/);
+  p = sendExpedition(p, shortIdx, team, T0);
+  assert.throws(() => sendExpedition(p, shortIdx, benchFriends(p).slice(0, 3), T0), /done for today/);
+  assert.throws(() => assignCrew(p, team[0], 'pens'), /expedition/);
+  assert.equal(benchFriends(p).some((id) => team.includes(id)), false);
+  assert.throws(() => collectExpedition(p, 0, T0), /not back/);
+  const shards = p.shards;
+  p = shine(p, 15);
+  const r = collectExpedition(p, 0, T0, () => 0);
+  assert.equal(r.profile.shards, shards + EXPEDITION_SHARDS.short);
+  assert.equal(r.profile.farm.mapPieces, 1);
+  assert.ok(r.story.includes(first5.find((x) => x.id === team[0]).name));
+  assert.equal(r.profile.farm.expeditions.length, 0);
+  assert.equal(expeditionSlots(r.profile.farm), 2);
+});
+
+test('needs: elements, jobs and themes count', () => {
+  const ocean = THEMES[0].items.map((i) => i.id);
+  assert.equal(needsMet(ocean.slice(0, 2), [{ kind: 'theme', value: 'ocean', n: 2 }]), 1);
+  assert.equal(needsMet(ocean.slice(0, 1), [{ kind: 'theme', value: 'ocean', n: 2 }]), 0);
+});
+
+test('big expeditions find their region critter by the pity count', () => {
+  const ids = first5.slice(0, 20).map((i) => i.id);
+  let p = open(kid(ids));
+  for (let k = 0; k < 3; k++) {
+    p.farm = { ...p.farm, routes: { day: p.farm.routes.day, list: [{ route: 'oldoak', needs: [], done: false }] } };
+    p = sendExpedition(p, 0, benchFriends(p).slice(0, 6), T0);
+    p = shine(p, 40);
+    const r = collectExpedition(p, 0, T0, () => 0.99);
+    p = r.profile;
+  }
+  assert.deepEqual(p.farm.waiting, ['mossling']);
+  p = buyPen({ ...p, farm: { ...p.farm, bells: 1000 } });
+  p.farm.critters = {};
+  p = welcomeExplorer(p, 'mossling').profile;
+  assert.ok(p.farm.critters.mossling);
+});
+
+test('an old clock-time farm upgrades without losing anything', () => {
+  const old = { ...newFarm(T0), v: 1, plots: [{ crop: 'corn', plantedAt: T0, readyAt: T0 + HOUR }, null, null, null], critters: { fluffle: { lastAt: T0 } }, forageAt: T0, workshop: { recipe: 'bread', readyAt: T0 + HOUR } };
+  delete old.expeditions;
+  delete old.clock;
+  const p = visitFarm({ ...kid([]), farm: old }, T0, mulberry32(1)).profile;
+  assert.equal(p.farm.v, 2);
+  assert.equal(harvestAll(p, T0).harvested.length, 1);
+  assert.ok(Array.isArray(p.farm.expeditions));
+  assert.equal(p.farm.workshop.ready, 0);
+});
+
+test('Wishing Well: a missing friend with the chosen trait, never ultra; coins use a daily pack', async () => {
+  const { makeWish, canWish, wishCoinCost, WISH_SHARDS, DAILY_PACK_CAP } = await import('../src/economy.js');
+  const attr = { kind: 'element', value: 'frost' };
+  let p = kid([], { coins: 1000, shards: 0 });
+  const cost = wishCoinCost(p, T0);
+  let r = makeWish(p, attr, 'coins', T0, () => 0);
+  assert.equal(farmTrait(r.result.item.id).element, 'frost');
+  assert.ok(['common', 'rare', 'epic'].includes(r.result.item.rarity));
+  assert.equal(r.profile.coins, 1000 - cost);
+  assert.equal(r.profile.packs.openedToday, 1);
+  assert.equal(canWish(r.profile, attr, 'shards', T0, 'rare').reason, 'shards');
+  p = { ...r.profile, shards: WISH_SHARDS.rare };
+  r = makeWish(p, { kind: 'job', value: 'builder' }, 'shards', T0, () => 0, 'rare');
+  assert.equal(r.result.item.rarity, 'rare');
+  assert.equal(farmTrait(r.result.item.id).job, 'builder');
+  assert.equal(r.profile.shards, 0);
+  // Daily cap applies to coin wishes.
+  const capped = { ...p, packs: { ...p.packs, day: new Date(T0).toLocaleDateString('sv'), openedToday: DAILY_PACK_CAP } };
+  assert.equal(canWish(capped, attr, 'coins', T0).reason, 'cap');
+  // Owning every common/rare/epic with the trait: nothing to wish for.
+  const all = Object.fromEntries(ALL_ITEMS.map((i) => [i.id, 1]));
+  assert.equal(canWish({ ...p, collection: all }, attr, 'coins', T0).reason, 'none');
 });

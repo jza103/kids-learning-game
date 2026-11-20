@@ -1,18 +1,23 @@
-// Friend Grove: the farm side game. Friends work on crews, crops grow in real
-// time, wild critters move in and make goodies, and requests pay Grove Bells.
+// Friend Grove: the farm side game. Friends work on crews, crops grow from
+// Sunshine (earned by learning, see sunshine.js), wild critters move in and
+// make goodies, friends go on expeditions, and requests pay Grove Bells.
+// The farm has its own clock, `farm.clock`, counted in Sunshine: it only moves
+// when Sunshine is poured in, so nothing depends on logging in at set times.
 // Pure functions: profile in, { profile, ... } out. The farm never pays coins,
 // packs or friends; those only come from learning. Mastery feeds the farm
 // (Wonder Seeds, Mystery Eggs), never the other way round.
-import { ITEMS_BY_ID } from './content.js';
+import { ITEMS_BY_ID, themesOpen } from './content.js';
+import { needsRefresh, MAX_BOX } from './srs.js';
+import { trackedFacts } from './math.js';
 import { friendInfo } from './friends.js';
 import { dayKey } from './rng.js';
 import {
   JOBS, farmTrait, BIOMES, BIOMES_BY_ID, CROPS, WONDER_CROPS, FORAGE, CRITTERS, CRITTERS_BY_ID, RECIPES,
-  GOODS_BY_ID, DECOR_BY_ID, JOURNAL_PAGES,
+  GOODS_BY_ID, DECOR_BY_ID, JOURNAL_PAGES, ELEMENT_IDS, JOB_IDS, REGIONS, REGIONS_BY_ID, ROUTES, ROUTES_BY_ID, TREASURES,
 } from './farm-content.js';
+import { mulberry32 } from './rng.js';
 
 const MIN = 60e3;
-const HOUR = 60 * MIN;
 
 // ---------- Tuning ----------
 export const STATIONS = {
@@ -25,7 +30,6 @@ export const STATIONS = {
 export const STATION_IDS = Object.keys(STATIONS);
 export const BASE_SLOTS = { fields: 2, pens: 1, forage: 1, workshop: 1, build: 1 };
 export const MAX_SLOTS = 5; // per station, 25 in all
-export const OFFLINE_CAP = 8 * HOUR; // growth while away tops out here
 export const START_PLOTS = 4;
 export const MAX_PLOTS = 12;
 export const PLOT_COSTS = [40, 60, 90, 130, 180, 240, 310, 400]; // 5th..12th plot
@@ -35,9 +39,15 @@ export const penCost = (pens) => 50 + 40 * (pens - START_PENS);
 export const START_BELLS = 20;
 export const SPEED_PER_POWER = 0.15;
 export const MAX_SPEED = 3;
-export const GOODY_MINUTES = 120;
-export const GOODY_MAX_CYCLES = OFFLINE_CAP / (GOODY_MINUTES * MIN);
-export const FORAGE_PER_POWER_HOUR = 0.5;
+// Sunshine: the Sun Jar (profile.sunJar) fills from learning; pouring it
+// moves farm.clock forward by that much.
+export const MORNING_RAIN = 8; // free Sunshine on the first farm visit each day
+export const GOLDEN_EVERY = 10 * MIN; // Golden Season: 1 Sunshine per 10 minutes...
+export const GOLDEN_MAX = 48; // ...up to this much per visit
+export const GOODY_SUN = 4; // Sunshine per critter goody cycle
+export const GOODY_MAX_CYCLES = 4; // goodies wait at most this many cycles
+export const FORAGE_PER_POWER_SUN = 0.1; // finds per Sunshine per point of forage power
+export const FORAGE_MAX_SUN = 40; // forage stops piling up after this much Sunshine
 export const VISITOR_EVERY = 90 * MIN;
 export const LIKES_NEEDED = 3; // favorite crops to befriend a wild critter (2 with a matching-element tender)
 export const REQUEST_SLOTS = 3;
@@ -59,26 +69,29 @@ export const FARM_XP = { harvest: 3, wonder: 10, goody: 1, craft: 5, befriend: 1
 // ---------- State ----------
 export function newFarm(now) {
   return {
-    v: 1,
+    v: 2,
     started: now,
+    clock: 0, // Sunshine poured in so far
+    rainDay: null,
+    goldenAt: now,
     bells: START_BELLS,
     xp: 0,
     xpDay: { day: null, got: 0 },
     plots: Array.from({ length: START_PLOTS }, () => null),
     pens: START_PENS,
-    critters: {}, // critterId -> { lastAt }
+    critters: {}, // critterId -> { at } (farm clock of last collect)
     visitor: null, // { id, baby? }
     visitorAt: now - VISITOR_EVERY, // first visitor right away
-    forageAt: now,
+    forageClock: 0,
     forageCarry: 0,
-    workshop: null, // { recipe, readyAt }
+    workshop: null, // { recipe, start, ready } in farm clock
     crew: Object.fromEntries(STATION_IDS.map((s) => [s, []])),
     items: {},
     requests: Array.from({ length: REQUEST_SLOTS }, () => null),
     requestAt: Array.from({ length: REQUEST_SLOTS }, () => now),
     biomes: ['meadow'],
     decor: [],
-    journal: { crops: [], critters: [], recipes: [], forage: [] },
+    journal: { crops: [], critters: [], recipes: [], forage: [], explore: [] },
     stamps: [],
     perks: { day: null, used: {} },
     halfOff: false,
@@ -88,12 +101,38 @@ export function newFarm(now) {
     babyPity: 0,
     inbox: [],
     gifts: { day: null, to: [] },
+    expeditions: [], // { route, team, start, ready, met, size }
+    routes: { day: null, list: [] }, // today's routes
+    mapPieces: 0,
+    souvenirs: [],
+    stories: [],
+    explorerPity: {},
+    waiting: [], // explorer critters waiting for a pen
   };
+}
+
+/** Bring an older (clock-time) farm up to the Sunshine clock. Mutates f. */
+function upgrade(f, now) {
+  if (f.v >= 2) return f;
+  f.v = 2;
+  f.clock = 0;
+  f.rainDay = null;
+  f.goldenAt = now;
+  // Anything growing is a free gift: ready now.
+  f.plots = f.plots.map((pl) => (pl ? { crop: pl.crop, start: 0, ready: 0 } : null));
+  for (const id of Object.keys(f.critters)) f.critters[id] = { at: 0 };
+  f.forageClock = 0;
+  delete f.forageAt;
+  if (f.workshop) f.workshop = { recipe: f.workshop.recipe, start: 0, ready: 0 };
+  Object.assign(f, { expeditions: [], routes: { day: null, list: [] }, mapPieces: 0, souvenirs: [], stories: [], explorerPity: {}, waiting: [] }, { ...f, v: 2 });
+  f.journal.explore = f.journal.explore || [];
+  return f;
 }
 
 export function farmOf(profile) {
   return profile.farm || newFarm(Date.now());
 }
+export const sunJar = (profile) => profile.sunJar || 0;
 
 const withFarm = (profile, farm) => ({ ...profile, farm });
 const clone = (f) => JSON.parse(JSON.stringify(f));
@@ -166,6 +205,7 @@ export function assignCrew(profile, friendId, station) {
   if (!profile.collection?.[friendId]) throw new Error('not your friend');
   if (!STATIONS[station]) throw new Error(`unknown station: ${station}`);
   const f = clone(farmOf(profile));
+  if ((f.expeditions || []).some((e) => e.team.includes(friendId))) throw new Error('that friend is on an expedition');
   for (const s of STATION_IDS) f.crew[s] = f.crew[s].filter((id) => id !== friendId);
   if (f.crew[station].length >= slotsFor(f, station)) throw new Error('crew full');
   f.crew[station].push(friendId);
@@ -186,7 +226,7 @@ export const openForage = (farm) => FORAGE.filter((x) => biomeOpen(farm, x.biome
 function addItem(f, id, n = 1) {
   f.items[id] = (f.items[id] || 0) + n;
   const g = GOODS_BY_ID[id];
-  const page = g.kind === 'wonder' ? 'crops' : g.kind === 'crop' ? 'crops' : g.kind === 'forage' ? 'forage' : g.kind === 'craft' ? 'recipes' : null;
+  const page = { wonder: 'crops', crop: 'crops', forage: 'forage', craft: 'recipes', treasure: 'explore' }[g.kind] || null;
   if (page) discover(f, page, id);
 }
 function takeItems(f, needs) {
@@ -197,6 +237,7 @@ function takeItems(f, needs) {
   }
 }
 function discover(f, page, id) {
+  if (!f.journal[page]) f.journal[page] = [];
   if (!f.journal[page].includes(id)) f.journal[page].push(id);
 }
 
@@ -216,12 +257,15 @@ export function plant(profile, plotIndex, cropId, now, rng = Math.random) {
     c = CROPS.find((x) => x.id === cropId);
     if (!c || !biomeOpen(f, c.biome)) throw new Error('crop not open');
   }
-  const ms = (c.minutes * MIN) / stationSpeed(profile, 'fields');
-  f.plots[plotIndex] = { crop: c.id, plantedAt: now, readyAt: now + Math.round(ms) };
+  const need = c.sun / stationSpeed(profile, 'fields');
+  f.plots[plotIndex] = { crop: c.id, start: f.clock, ready: f.clock + need };
   return withFarm(profile, f);
 }
 
-export const plotReady = (plot, now) => Boolean(plot && now >= plot.readyAt);
+/** Is this plot ready? `clock` is the farm's Sunshine clock (farm.clock). */
+export const plotReady = (plot, clock) => Boolean(plot && clock >= plot.ready - 1e-9);
+/** Sunshine still needed by a plot. */
+export const sunLeft = (ready, clock) => Math.max(0, Math.ceil(ready - clock - 1e-9));
 
 /** Harvest every ready plot. Returns { profile, harvested: [{ id, n }], events }. */
 export function harvestAll(profile, now) {
@@ -230,7 +274,7 @@ export function harvestAll(profile, now) {
   const harvested = [];
   const events = [];
   f.plots = f.plots.map((plot) => {
-    if (!plotReady(plot, now)) return plot;
+    if (!plotReady(plot, f.clock)) return plot;
     const g = GOODS_BY_ID[plot.crop];
     const n = g.kind === 'wonder' ? 1 : 2 + (elements.has(g.element) ? 1 : 0);
     addItem(f, g.id, n);
@@ -245,9 +289,9 @@ export function harvestAll(profile, now) {
 export function fertilize(profile, plotIndex, now) {
   const f = clone(farmOf(profile));
   const plot = f.plots[plotIndex];
-  if (!plot || plotReady(plot, now)) throw new Error('nothing growing');
+  if (!plot || plotReady(plot, f.clock)) throw new Error('nothing growing');
   if ((profile.shards || 0) < FERTILIZER_SHARDS) throw new Error('not enough shards');
-  plot.readyAt = now;
+  plot.ready = f.clock;
   return { ...withFarm(profile, f), shards: profile.shards - FERTILIZER_SHARDS };
 }
 
@@ -256,12 +300,12 @@ export const ownedCritters = (farm) => Object.keys(farm.critters);
 export const penSpace = (farm) => farm.pens - ownedCritters(farm).length;
 
 /** Goodies waiting from one critter (capped at GOODY_MAX_CYCLES cycles). */
-export function goodyCycles(profile, critterId, now) {
+export function goodyCycles(profile, critterId) {
   const f = farmOf(profile);
   const c = f.critters[critterId];
   if (!c) return 0;
-  const cycle = (GOODY_MINUTES * MIN) / stationSpeed(profile, 'pens');
-  return Math.min(GOODY_MAX_CYCLES, Math.floor((now - c.lastAt) / cycle));
+  const cycle = GOODY_SUN / stationSpeed(profile, 'pens');
+  return Math.min(GOODY_MAX_CYCLES, Math.floor((f.clock - c.at) / cycle + 1e-9));
 }
 
 /**
@@ -276,7 +320,7 @@ export function collectGoodies(profile, now, rng = Math.random) {
   const events = [];
   let any = false;
   for (const id of Object.keys(f.critters)) {
-    const cycles = goodyCycles(profile, id, now);
+    const cycles = goodyCycles(profile, id);
     if (!cycles) continue;
     any = true;
     const critter = CRITTERS_BY_ID[id];
@@ -286,7 +330,7 @@ export function collectGoodies(profile, now, rng = Math.random) {
       collected[g] = (collected[g] || 0) + cycles * per;
       gainXp(f, FARM_XP.goody * cycles, now, events);
     }
-    f.critters[id] = { lastAt: now };
+    f.critters[id] = { at: f.clock };
   }
   if (any) {
     const baby = babyCandidates(f)[0];
@@ -321,7 +365,7 @@ export function befriend(profile, now) {
   const v = CRITTERS_BY_ID[f.visitor.id];
   const cost = befriendCost(f);
   if (cost) takeItems(f, { [v.likes]: cost });
-  f.critters[v.id] = { lastAt: now };
+  f.critters[v.id] = { at: f.clock };
   discover(f, 'critters', v.id);
   f.visitor = null;
   f.visitorAt = now;
@@ -358,18 +402,21 @@ export function hatchEgg(profile, now, rng = Math.random) {
   if (penSpace(f) <= 0) throw new Error('no pen space');
   f.eggs--;
   const c = left[Math.floor(rng() * left.length)];
-  f.critters[c.id] = { lastAt: now };
+  f.critters[c.id] = { at: f.clock };
   discover(f, 'critters', c.id);
   events.push({ type: 'hatch', id: c.id });
   return { profile: withFarm(profile, f), events: [...events, ...stampEvents(f)] };
 }
 
 // ---------- Forage ----------
-/** Forage items found so far (whole items) since the last pick-up, capped. */
-export function forageWaiting(profile, now) {
+function forageTotal(profile) {
   const f = farmOf(profile);
-  const hours = Math.min(OFFLINE_CAP, Math.max(0, now - f.forageAt)) / HOUR;
-  return Math.floor(f.forageCarry + hours * FORAGE_PER_POWER_HOUR * stationPower(profile, 'forage'));
+  const sun = Math.min(FORAGE_MAX_SUN, Math.max(0, f.clock - f.forageClock));
+  return f.forageCarry + sun * FORAGE_PER_POWER_SUN * stationPower(profile, 'forage');
+}
+/** Forage items found so far (whole items) since the last pick-up, capped. */
+export function forageWaiting(profile) {
+  return Math.floor(forageTotal(profile) + 1e-9);
 }
 
 function forageFinds(f, n, rng) {
@@ -388,11 +435,10 @@ function forageFinds(f, n, rng) {
 
 export function collectForage(profile, now, rng = Math.random) {
   const f = clone(farmOf(profile));
-  const hours = Math.min(OFFLINE_CAP, Math.max(0, now - f.forageAt)) / HOUR;
-  const total = f.forageCarry + hours * FORAGE_PER_POWER_HOUR * stationPower(profile, 'forage');
-  const n = Math.floor(total);
-  f.forageCarry = total - n;
-  f.forageAt = now;
+  const total = forageTotal(profile);
+  const n = Math.floor(total + 1e-9);
+  f.forageCarry = Math.max(0, total - n);
+  f.forageClock = f.clock;
   const found = forageFinds(f, n, rng);
   const events = [];
   for (const [id, k] of Object.entries(found)) addItem(f, id, k);
@@ -407,8 +453,7 @@ export function startCraft(profile, recipeId, now) {
   const r = RECIPES.find((x) => x.id === recipeId);
   if (!r || !biomeOpen(f, r.biome)) throw new Error('recipe not open');
   takeItems(f, r.needs);
-  const ms = (r.minutes * MIN) / stationSpeed(profile, 'workshop');
-  f.workshop = { recipe: r.id, readyAt: now + Math.round(ms) };
+  f.workshop = { recipe: r.id, start: f.clock, ready: f.clock + r.sun / stationSpeed(profile, 'workshop') };
   return withFarm(profile, f);
 }
 
@@ -418,7 +463,7 @@ export function canCraft(farm, recipe) {
 
 export function collectCraft(profile, now) {
   const f = clone(farmOf(profile));
-  if (!f.workshop || now < f.workshop.readyAt) throw new Error('not ready');
+  if (!f.workshop || !plotReady(f.workshop, f.clock)) throw new Error('not ready');
   const id = f.workshop.recipe;
   addItem(f, id, 1);
   f.workshop = null;
@@ -570,7 +615,7 @@ export function buyDecor(profile, decorId) {
 // ---------- Journal ----------
 export function journalProgress(farm, page) {
   const entries = JOURNAL_PAGES[page].entries;
-  const found = entries.filter((e) => farm.journal[page].includes(e.id)).length;
+  const found = entries.filter((e) => (farm.journal[page] || []).includes(e.id)).length;
   return { found, total: entries.length, complete: found === entries.length };
 }
 /** Award stamps (and their decorations) for newly finished pages. Mutates f. */
@@ -605,9 +650,9 @@ export function usePerk(profile, friendId, now, rng = Math.random) {
   const f = clone(f0);
   const events = [];
   if (job === 'grower') {
-    const i = f.plots.findIndex((p) => p && now < p.readyAt);
+    const i = f.plots.findIndex((p) => p && !plotReady(p, f.clock));
     if (i < 0) throw new Error('nothing growing');
-    f.plots[i].readyAt = now;
+    f.plots[i].ready = f.clock;
   } else if (job === 'tender') {
     if (f.visitor) throw new Error('a critter is already visiting');
     const v = pickVisitor(f, rng);
@@ -619,8 +664,8 @@ export function usePerk(profile, friendId, now, rng = Math.random) {
     for (const [id, k] of Object.entries(found)) addItem(f, id, k);
     events.push({ type: 'found', found });
   } else if (job === 'crafter') {
-    if (!f.workshop || now >= f.workshop.readyAt) throw new Error('nothing in the workshop');
-    f.workshop.readyAt = now;
+    if (!f.workshop || plotReady(f.workshop, f.clock)) throw new Error('nothing in the workshop');
+    f.workshop.ready = f.clock;
   } else if (job === 'builder') {
     if (f.halfOff) throw new Error('your next build is already half price');
     f.halfOff = true;
@@ -643,6 +688,217 @@ export function eggCount(profile) {
   return legends + (profile.completedSets || []).length;
 }
 
+// ---------- Sunshine ----------
+/**
+ * Pour the Sun Jar into the farm: the farm clock moves forward by that much,
+ * so every crop, critter, forage trip, craft and expedition grows at once.
+ */
+export function pourSun(profile, amount = null) {
+  if (!sunJar(profile)) throw new Error('the Sun Jar is empty');
+  const useful = sunUseful(profile);
+  if (amount == null && !useful) throw new Error('plant something or send an expedition first, so the Sunshine has something to grow');
+  const n = Math.min(sunJar(profile), Math.max(0, Math.ceil((amount ?? useful) - 1e-9)));
+  if (!n) throw new Error('nothing to pour');
+  const f = clone(farmOf(profile));
+  f.clock += n;
+  return { profile: { ...withFarm(profile, f), sunJar: sunJar(profile) - n }, poured: n };
+}
+
+/**
+ * The most Sunshine that still does something right now: finishing what's
+ * growing, filling critters' goodies and the forage basket. Pouring stops
+ * there, so Sunshine is never wasted.
+ */
+export function sunUseful(profile) {
+  const f = farmOf(profile);
+  let need = sunToFinish(profile);
+  const pens = stationSpeed(profile, 'pens');
+  for (const c of Object.values(f.critters)) need = Math.max(need, (GOODY_SUN * GOODY_MAX_CYCLES) / pens - (f.clock - c.at));
+  if (stationPower(profile, 'forage') > 0) need = Math.max(need, FORAGE_MAX_SUN - (f.clock - f.forageClock));
+  return Math.max(0, Math.ceil(need - 1e-9));
+}
+
+/** Sunshine still needed before everything now growing is done (0 if nothing). */
+export function sunToFinish(profile) {
+  const f = farmOf(profile);
+  const ends = [...f.plots.filter(Boolean).map((p) => p.ready), f.workshop?.ready ?? 0, ...f.expeditions.map((e) => e.ready)];
+  return Math.max(0, Math.ceil(Math.max(0, ...ends) - f.clock - 1e-9));
+}
+
+// ---------- Golden Season ----------
+const doneItem = (i, now) => Boolean(i) && i.masteredAt != null && i.box >= MAX_BOX && !needsRefresh(i, now);
+
+/**
+ * True when there's nothing left to learn right now: every spelling word,
+ * counted math fact and Word Match word is mastered and none needs a refresh.
+ * Then the farm grows on its own (Jason: no gate for a kid who has mastered
+ * everything).
+ */
+export function goldenSeason(profile, now) {
+  const words = profile.words || [];
+  if (!words.every((w) => doneItem(profile.srs?.[w.id], now))) return false;
+  const msrs = profile.math?.srs || {};
+  for (const op of ['mul', 'div']) if (!trackedFacts(op).every((f) => doneItem(msrs[f.id], now))) return false;
+  const vocab = Object.values(profile.vocab?.srs || {});
+  if (!vocab.length || !vocab.every((i) => doneItem(i, now))) return false;
+  return true;
+}
+
+// ---------- Expeditions ----------
+export const EXPEDITION_SUN = { short: 15, big: 40 };
+export const TEAM_SIZE_FOR = { short: 3, big: 6 };
+export const ROUTES_PER_DAY = 3;
+export const NEED_SPEED = 0.25; // each need met: +25% speed
+export const EXPEDITION_SHARDS = { short: 3, big: 8 };
+export const EXPEDITION_PIECES = { short: 1, big: 2 };
+export const EXPEDITION_BELLS = { short: 15, big: 40 };
+export const EXPLORER_CHANCE = 0.3;
+export const EXPLORER_PITY = 3; // big trips in a region before its critter is guaranteed
+export const FARM_XP_TRIP = { short: 8, big: 16 };
+
+export function expeditionSlots(farm) {
+  const level = farmLevel(farm);
+  return level >= 10 ? 4 : level >= 5 ? 3 : 2;
+}
+export const regionOpen = (farm, regionId) => (farm.mapPieces || 0) >= REGIONS_BY_ID[regionId].pieces;
+
+function seedFor(text) {
+  let h = 2166136261;
+  for (const ch of text) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return h >>> 0;
+}
+
+/** Today's routes: the same all day, different each day. */
+export function makeRoutes(profile, farm, day) {
+  const rng = mulberry32(seedFor(`${profile.id}|${day}`));
+  const open = ROUTES.filter((r) => regionOpen(farm, r.region));
+  const bigs = open.filter((r) => r.size === 'big');
+  const shorts = open.filter((r) => r.size === 'short');
+  const pick = (list) => list.splice(Math.floor(rng() * list.length), 1)[0];
+  const chosen = [pick([...bigs])];
+  const pool = [...shorts];
+  while (chosen.length < ROUTES_PER_DAY && pool.length) chosen.push(pick(pool));
+  const themes = themesOpen().map((t) => t.id);
+  return chosen.map((r) => {
+    const kinds = ['element', 'job', 'theme'];
+    const count = r.size === 'big' ? 3 : 2;
+    const needs = [];
+    for (let i = 0; i < count; i++) {
+      const kind = kinds.splice(Math.floor(rng() * kinds.length), 1)[0];
+      if (kind === 'element') needs.push({ kind, value: ELEMENT_IDS[Math.floor(rng() * ELEMENT_IDS.length)], n: r.size === 'big' ? 2 : 1 });
+      else if (kind === 'job') needs.push({ kind, value: JOB_IDS[Math.floor(rng() * JOB_IDS.length)], n: 1 });
+      else needs.push({ kind, value: themes[Math.floor(rng() * themes.length)], n: 2 });
+    }
+    return { route: r.id, needs, done: false };
+  });
+}
+
+/** Does a friend count toward a need? */
+export function fitsNeed(id, need) {
+  const t = farmTrait(id);
+  const item = ITEMS_BY_ID[id];
+  if (!t || !item) return false;
+  if (need.kind === 'element') return t.element === need.value;
+  if (need.kind === 'job') return t.job === need.value;
+  return item.theme === need.value;
+}
+export function needsMet(team, needs) {
+  return needs.filter((n) => team.filter((id) => fitsNeed(id, n)).length >= n.n).length;
+}
+
+/** Friends who are free for an expedition: owned, not on a crew, not already out. */
+export function benchFriends(profile) {
+  const f = farmOf(profile);
+  const busy = new Set([...STATION_IDS.flatMap((s) => f.crew[s]), ...f.expeditions.flatMap((e) => e.team)]);
+  return Object.keys(profile.collection || {}).filter((id) => ITEMS_BY_ID[id] && farmTrait(id) && !busy.has(id));
+}
+
+export function sendExpedition(profile, routeIndex, team, now) {
+  const f = clone(farmOf(profile));
+  const r = f.routes.list[routeIndex];
+  if (!r || r.done) throw new Error('that route is done for today');
+  const route = ROUTES_BY_ID[r.route];
+  if (f.expeditions.length >= expeditionSlots(f)) throw new Error('all teams are out');
+  const size = TEAM_SIZE_FOR[route.size];
+  const unique = [...new Set(team)];
+  if (unique.length !== size) throw new Error(`pick ${size} friends`);
+  const free = new Set(benchFriends(profile));
+  if (!unique.every((id) => free.has(id))) throw new Error('a friend is busy');
+  const met = needsMet(unique, r.needs);
+  const need = EXPEDITION_SUN[route.size] / (1 + NEED_SPEED * met);
+  f.expeditions.push({ route: route.id, team: unique, start: f.clock, ready: f.clock + need, met, size: route.size });
+  r.done = true;
+  return withFarm(profile, f);
+}
+
+const STORY = {
+  short: [
+    '{a}, {b} and {c} followed a trail of {t} and came home giggling.',
+    '{a} led the way, {b} kept everyone singing, and {c} spotted the {t} first.',
+    '{a} tripped over a root, {b} caught them, and {c} found {t} right there.',
+  ],
+  big: [
+    'It was a long trip! {a} read the map, {b} carried snacks, and the whole team of six found {t}.',
+    '{a} and {b} built a raft, {c} steered, and everyone came back with {t}.',
+    'A storm rolled in, but {a} found a cave, {b} told stories, and {c} discovered {t}.',
+  ],
+};
+
+/** Bring a finished expedition home. Returns { profile, rewards, story, events }. */
+export function collectExpedition(profile, index, now, rng = Math.random) {
+  const f = clone(farmOf(profile));
+  const e = f.expeditions[index];
+  if (!e || !plotReady(e, f.clock)) throw new Error('not back yet');
+  const route = ROUTES_BY_ID[e.route];
+  const treasure = TREASURES.find((t) => t.region === route.region);
+  const n = (e.size === 'big' ? 2 : 1) + e.met * (e.size === 'big' ? 2 : 1);
+  addItem(f, treasure.id, n);
+  discover(f, 'explore', treasure.id);
+  const bells = EXPEDITION_BELLS[e.size];
+  f.bells += bells;
+  f.mapPieces = (f.mapPieces || 0) + EXPEDITION_PIECES[e.size];
+  const events = [];
+  const opened = REGIONS.filter((r) => r.pieces > (f.mapPieces - EXPEDITION_PIECES[e.size]) && r.pieces <= f.mapPieces);
+  for (const r of opened) events.push({ type: 'region', id: r.id });
+  if (!f.souvenirs.includes(route.souvenir.id)) {
+    f.souvenirs.push(route.souvenir.id);
+    discover(f, 'explore', route.souvenir.id);
+    events.push({ type: 'souvenir', id: route.id });
+  }
+  if (e.size === 'big') {
+    const ex = CRITTERS.find((c) => c.kind === 'explorer' && c.region === route.region);
+    if (ex && !f.critters[ex.id] && !f.waiting.includes(ex.id)) {
+      f.explorerPity[route.region] = (f.explorerPity[route.region] || 0) + 1;
+      if (f.explorerPity[route.region] >= EXPLORER_PITY || rng() < EXPLORER_CHANCE) {
+        f.waiting.push(ex.id);
+        events.push({ type: 'explorer', id: ex.id });
+      }
+    }
+  }
+  const names = e.team.map((id) => ITEMS_BY_ID[id].name);
+  const lines = STORY[e.size];
+  const story = lines[Math.floor(rng() * lines.length)]
+    .replace('{a}', names[0]).replace('{b}', names[1]).replace('{c}', names[2])
+    .replace('{t}', `${n} ${treasure.name}${n > 1 && !treasure.name.endsWith('s') ? 's' : ''}`);
+  f.stories = [{ route: route.id, text: story, team: e.team }, ...f.stories].slice(0, 20);
+  f.expeditions.splice(index, 1);
+  gainXp(f, FARM_XP_TRIP[e.size], now, events);
+  const shards = EXPEDITION_SHARDS[e.size];
+  const next = { ...withFarm(profile, f), shards: (profile.shards || 0) + shards };
+  return { profile: next, rewards: { treasure: treasure.id, n, bells, shards, pieces: EXPEDITION_PIECES[e.size] }, story, events: [...events, ...stampEvents(f)] };
+}
+
+/** Move an explorer critter that was waiting for room into a pen. */
+export function welcomeExplorer(profile, critterId) {
+  const f = clone(farmOf(profile));
+  if (!f.waiting.includes(critterId)) throw new Error('nobody waiting');
+  if (penSpace(f) <= 0) throw new Error('no pen space');
+  f.waiting = f.waiting.filter((id) => id !== critterId);
+  f.critters[critterId] = { at: f.clock };
+  discover(f, 'critters', critterId);
+  return { profile: withFarm(profile, f), events: [{ type: 'befriend', id: critterId }, ...stampEvents(f)] };
+}
+
 // ---------- Visits: catch the farm up to now ----------
 /**
  * Run when the farm opens (and on each farm action): claim treasures from
@@ -650,8 +906,28 @@ export function eggCount(profile) {
  * for a given `now`.
  */
 export function visitFarm(profile, now, rng = Math.random) {
-  const f = clone(profile.farm || newFarm(now));
+  const f = upgrade(clone(profile.farm || newFarm(now)), now);
   const events = [];
+  let jar = sunJar(profile);
+  // Morning Rain: a little free Sunshine on the first visit each day.
+  const today = dayKey(now);
+  if (f.rainDay !== today) {
+    f.rainDay = today;
+    jar += MORNING_RAIN;
+    events.push({ type: 'rain', n: MORNING_RAIN });
+  }
+  // Golden Season: nothing left to learn, so the farm grows on its own.
+  if (goldenSeason(profile, now)) {
+    const n = Math.min(GOLDEN_MAX, Math.floor(Math.max(0, now - (f.goldenAt ?? now)) / GOLDEN_EVERY));
+    if (n) {
+      jar += n;
+      f.goldenAt = now;
+      events.push({ type: 'golden', n });
+    }
+  } else {
+    f.goldenAt = now;
+  }
+  if (!f.routes || f.routes.day !== today) f.routes = { day: today, list: makeRoutes(profile, f, today) };
   // Learning feeds the farm: one Wonder Seed per mastery, an egg per set.
   const mastered = masteryCount(profile);
   if (mastered > f.claimed.mastery) {
@@ -687,7 +963,7 @@ export function visitFarm(profile, now, rng = Math.random) {
     events.push({ type: 'gift', ...g });
   }
   f.inbox = [];
-  next = withFarm(profile, f);
+  next = { ...withFarm(profile, f), sunJar: jar };
   return { profile: next, events: [...events, ...stampEvents(f)] };
 }
 
