@@ -54,6 +54,7 @@ export function mathState(profile) {
     superCredit: 0,
     seconds: DEFAULT_SECONDS,
     stats: { answered: 0, correct: 0 },
+    records: {}, // trial key -> { best, last, runs } in ms
     ...m,
   };
 }
@@ -155,7 +156,7 @@ export function trickyFacts(state, n = 6) {
  * mode: 'practice' or 'speed'.
  * Returns { profile, coins, xp, mastered, superStep, battleResult }.
  */
-export function recordFact(profile, factId, result, { mode = 'speed', now = Date.now(), powers = { xp: 0 } } = {}) {
+export function recordFact(profile, factId, result, { mode = 'speed', now = Date.now(), powers = { xp: 0 }, ms = null } = {}) {
   if (!factById(factId)) throw new Error(`unknown fact: ${factId}`);
   const state = mathState(profile);
   const before = itemFor(state, factId, now);
@@ -177,6 +178,7 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
     after = review(before, srsResult, now);
     coins = coinsForAnswer(before, srsResult);
   }
+  if (ms != null && (result === 'correct' || result === 'slow')) after = withSolveTime(after, ms);
   const mastered = before.masteredAt == null && after.masteredAt != null;
   let xp = XP_PER[srsResult];
   if (practice) {
@@ -207,6 +209,88 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
   }
   next.math = nextState;
   return { profile: next, coins, xp, mastered, superStep, battleResult: srsResult };
+}
+
+// ---------- solve times ----------
+// Each fact keeps a running average of how long right answers take (recent
+// answers count most), so the slow ones stand out.
+export const SOLVE_TIME_CAP_MS = 20000; // a longer pause (walked away) counts as 20 s
+export const SOLVE_AVG_WEIGHT = 0.3; // weight of the newest answer
+
+export function withSolveTime(item, ms) {
+  const t = Math.min(Math.max(0, ms), SOLVE_TIME_CAP_MS);
+  const timed = (item.timed || 0) + 1;
+  const avgMs = item.avgMs == null ? t : Math.round(item.avgMs * (1 - SOLVE_AVG_WEIGHT) + t * SOLVE_AVG_WEIGHT);
+  return { ...item, avgMs, timed, lastMs: Math.round(t) };
+}
+
+/** Facts sorted slowest first (only ones answered right at least once). */
+export function slowestFacts(state, n = 8) {
+  return Object.values(state.srs)
+    .filter((i) => i.avgMs != null)
+    .sort((a, b) => b.avgMs - a.avgMs)
+    .slice(0, n)
+    .map((i) => ({ ...factById(i.id), item: i }))
+    .filter((f) => f.id);
+}
+
+export const formatSeconds = (ms) => `${(ms / 1000).toFixed(1)}s`;
+/** 83400 -> "1:23.4", 9800 -> "9.8s" */
+export function formatTime(ms) {
+  const tenths = Math.round(ms / 100);
+  const min = Math.floor(tenths / 600);
+  const sec = (tenths % 600) / 10;
+  return min ? `${min}:${sec.toFixed(1).padStart(4, '0')}` : `${sec.toFixed(1)}s`;
+}
+
+// ---------- time trials ----------
+// Beat your own time: every fact of one table in a shuffled order, against the
+// clock. A wrong answer adds a penalty and has to be fixed before moving on.
+// The final mission takes one fact from every × and ÷ table. Records are
+// personal bests only.
+export const TRIAL_PENALTY_MS = 3000;
+export const TRIAL_RECORD_XP = 30; // XP (cosmetic only) for a first finish or a new best
+export const FINAL_KEY = 'final';
+export const FINAL_PER_TABLE = 1; // facts from each × table (0-12) and each ÷ table (1-12)
+
+export const trialKey = (op, table) => `${op}:${table}`;
+
+export function shuffle(list, rng = Math.random) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+export function trialFacts(op, table, rng = Math.random) {
+  return shuffle(tableFacts(op, table), rng);
+}
+
+export function finalMissionFacts(rng = Math.random) {
+  const picks = [];
+  for (const op of ['mul', 'div']) {
+    for (let t = 0; t <= MAX_FACTOR; t++) picks.push(...shuffle(tableFacts(op, t), rng).slice(0, FINAL_PER_TABLE));
+  }
+  return shuffle(picks, rng);
+}
+
+export const FINAL_LENGTH = (2 * MAX_FACTOR + 1) * FINAL_PER_TABLE;
+
+/** Save a finished run. Returns { profile, newBest, prevBest, xp }. */
+export function recordTrial(profile, key, ms) {
+  const state = mathState(profile);
+  const prev = state.records[key];
+  const newBest = !prev || ms < prev.best;
+  const rec = { best: newBest ? ms : prev.best, last: ms, runs: (prev?.runs || 0) + 1 };
+  const xp = newBest ? TRIAL_RECORD_XP : 0;
+  return {
+    profile: { ...profile, xp: profile.xp + xp, math: { ...state, records: { ...state.records, [key]: rec } } },
+    newBest,
+    prevBest: prev?.best ?? null,
+    xp,
+  };
 }
 
 /** A skip-counting clue: "Count by 7s, 8 times: 7, 14, 21, …" */

@@ -265,3 +265,20 @@ table.check td { vertical-align: top; }
 .xpbar.sm { height: 8px; }
 .gt { white-space: nowrap; }
 .friend-event { font-size: 1.15rem; margin: 6px 0; }
+
+/* Time trials */
+.clock { font-size: 3rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.trial-progress { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 6px 0; }
+.trial-progress > div { height: 100%; background: var(--accent); transition: width .2s; }
+.records, .slow-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin-top: 12px; }
+.slow-list { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.record { font: inherit; font-weight: 400; min-height: 0; border: 0; color: var(--ink); cursor: pointer; display: flex; flex-direction: column; align-items: center; padding: 8px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 10%, white); font-variant-numeric: tabular-nums; }
+.record.none { background: #f4f2fa; color: var(--muted); }
+.final-card { border-color: #f5a524; background: linear-gradient(135deg, #fff8e6, #fdf0ff); }
+@media (max-width: 600px) {
+  [data-screen="math-trial"] .topbar { margin-bottom: 4px; }
+  [data-screen="math-trial"] .clock { font-size: 2.2rem; }
+  [data-screen="math-trial"] .feedback { min-height: 1.5em; margin: 6px 0; }
+  [data-screen="math-trial"] .keypad { gap: 8px; }
+  [data-screen="math-trial"] .keypad button { min-height: 56px; }
+}

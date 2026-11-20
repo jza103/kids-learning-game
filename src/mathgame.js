@@ -10,6 +10,8 @@ import {
   GAME_TYPE, OPS, MODES, ROUND_LENGTH, MAX_FACTOR, PRACTICE_MAX_BOX, PRACTICE_REWARD, SECONDS_CHOICES, UNLOCK_ORDER,
   FACT_MASTERY_COINS, FACTS_PER_SUPER_STEP, mathState, poolFor, pickFact, recordFact, maybeUnlock, unlockedTables,
   tableSummary, trickyFacts, factHint, factById, itemFor, tableFacts,
+  slowestFacts, formatSeconds, formatTime, trialKey, trialFacts, finalMissionFacts, recordTrial, FINAL_KEY, FINAL_LENGTH,
+  TRIAL_PENALTY_MS, TRIAL_RECORD_XP,
 } from './math.js';
 
 // ---- Friend hooks: only friends that know math give powers here; all of them learn. ----
@@ -25,7 +27,7 @@ const TABLES = Array.from({ length: MAX_FACTOR + 1 }, (_, i) => i);
 
 export function initMath(ctx) {
   const { ui, profile, update, go, render, esc, heroHtml, topbar, floatText, superProgressHtml } = ctx;
-  ui.math = { op: 'mul', table: null, game: null };
+  ui.math = { op: 'mul', table: null, game: null, trial: null };
   const g = () => ui.math.game;
 
   // ---------- screens ----------
@@ -56,6 +58,42 @@ export function initMath(ctx) {
       }</p>`;
   }
 
+  const trialName = (op, table) => (op === 'mix' ? `×÷${table} tables` : `${OPS[op].symbol}${table} table`);
+  const bestOf = (state, key) => state.records[key]?.best;
+
+  function trialCard(state) {
+    const { op, table } = ui.math;
+    const tables = TABLES.filter((t) => !(op !== 'mul' && t === 0));
+    const best = table != null ? bestOf(state, trialKey(op, table)) : null;
+    const fin = bestOf(state, FINAL_KEY);
+    return `<div class="card">
+        <h3>⏱️ Time trials</h3>
+        <p class="small muted">Answer every fact in a table as fast as you can (tap a table below to race it). A miss adds ${TRIAL_PENALTY_MS / 1000} seconds. Try to beat your own best time!</p>
+        ${
+          table != null
+            ? `<button class="big" style="width:100%" data-action="math-trial" data-key="${trialKey(op, table)}">⏱️ ${trialName(op, table)}${best ? ` · best ${formatTime(best)}` : ''}</button>`
+            : '<p><strong>Pick a table above to race it.</strong></p>'
+        }
+        <div class="records">${tables
+          .map((t) => {
+            const b = bestOf(state, trialKey(op, t));
+            return `<button class="record ${b ? '' : 'none'}" data-action="math-trial" data-key="${trialKey(op, t)}"><strong>${op === 'mix' ? '×÷' : OPS[op].symbol}${t}</strong><span>${b ? formatTime(b) : '—'}</span></button>`;
+          })
+          .join('')}</div>
+      </div>
+      <div class="card final-card">
+        <h3>🏁 Final mission</h3>
+        <p class="small">${FINAL_LENGTH} facts from every table, × and ÷. ${fin ? `Your best: <strong>${formatTime(fin)}</strong>` : 'No record yet.'}</p>
+        <button class="big super" style="width:100%" data-action="math-trial" data-key="${FINAL_KEY}">🏁 Start the final mission</button>
+      </div>`;
+  }
+
+  function trialTitle(key) {
+    if (key === FINAL_KEY) return '🏁 Final mission';
+    const [op, t] = key.split(':');
+    return `⏱️ ${trialName(op, Number(t))}`;
+  }
+
   const screens = {
     math() {
       const p = profile();
@@ -69,6 +107,7 @@ export function initMath(ctx) {
           <button class="big" data-action="math-start" data-mode="speed">${MODES.speed.emoji} Speed
             <div class="small">${state.seconds} seconds each · full coins · master facts</div></button>
         </div>
+        ${trialCard(state)}
         <div class="card">${superProgressHtml(p)}
           <p class="small muted">Answer a fact fast in Speed mode on ${MAX_BOX} different days to master it. Every ${FACTS_PER_SUPER_STEP} facts you master fill one Super Pack dot.</p></div>
         <button class="secondary" style="width:100%" data-action="go" data-to="math-facts">📊 My facts (${state.mastered} mastered)</button>`;
@@ -110,12 +149,7 @@ export function initMath(ctx) {
           <div class="fact ${copy ? 'small-fact' : ''}">${esc(f.text)} = <span class="slot" id="math-answer">${esc(game.typed) || '?'}</span></div>
           ${game.usedHint && game.phase === 'ask' ? `<div class="math-hint">${esc(factHint(f))}</div>` : ''}
           <div class="feedback ${game.feedbackClass || ''}" id="math-feedback">${esc(game.feedback || '')}</div>
-          <div class="keypad">
-            ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button class="secondary" data-action="math-key" data-k="${n}">${n}</button>`).join('')}
-            <button class="secondary" data-action="math-key" data-k="del" aria-label="Delete">⌫</button>
-            <button class="secondary" data-action="math-key" data-k="0">0</button>
-            <button data-action="math-key" data-k="go" aria-label="Enter">${copy ? '🔒' : '⚡'}</button>
-          </div>
+          ${keypadHtml(copy)}
           ${
             game.phase === 'ask' && b.hintsLeft > 0 && !game.usedHint
               ? `<div style="text-align:center;margin-top:12px"><button class="secondary" data-action="math-hint">💡 Hint (${b.hintsLeft})</button></div>`
@@ -157,6 +191,55 @@ export function initMath(ctx) {
         </div>`;
     },
 
+    'math-trial'() {
+      const t = ui.math.trial;
+      const f = t.facts[t.i];
+      const state = mathState(profile());
+      const best = bestOf(state, t.key);
+      return `<div class="topbar">
+          <button class="secondary" data-action="math-trial-quit">Stop</button>
+          <span class="pill">${esc(trialTitle(t.key))}</span>
+          <span class="pill">${best ? `🏆 ${formatTime(best)}` : '🏆 —'}</span>
+        </div>
+        <div class="card math-card">
+          <div class="clock" id="trial-clock">${formatTime(trialElapsed(t))}</div>
+          <div class="trial-progress"><div style="width:${(100 * t.i) / t.facts.length}%"></div></div>
+          <div class="small muted" style="text-align:center;margin-bottom:8px">${t.i + 1} of ${t.facts.length}${t.penalty ? ` · +${t.penalty / 1000}s for misses` : ''}</div>
+          ${t.fix ? `<div class="your-answer" style="text-decoration:none">It's ${f.answer}. Type it to keep going.</div>` : ''}
+          <div class="fact">${esc(f.text)} = <span class="slot" id="math-answer">${esc(t.typed) || '?'}</span></div>
+          <div class="feedback ${t.feedbackClass || ''}" id="math-feedback">${esc(t.feedback || '')}</div>
+          ${keypadHtml(false)}
+        </div>`;
+    },
+
+    'math-trial-done'() {
+      const t = ui.math.trial;
+      const r = t.result;
+      const slowest = [...t.times].sort((a, b) => b.ms - a.ms).slice(0, 3);
+      return `<h1>${r.newBest ? '🎉 New record!' : '🏁 Finished!'}</h1>
+        <div class="card">
+          <div class="clock">${formatTime(r.ms)}</div>
+          <p style="text-align:center">${esc(trialTitle(t.key))} · ${t.facts.length} facts${t.misses ? ` · ${t.misses} miss${t.misses > 1 ? 'es' : ''} (+${t.penalty / 1000}s)` : ' · no misses!'}</p>
+          ${
+            r.newBest
+              ? `<p style="text-align:center;font-size:1.2rem"><strong>${r.prevBest ? `${formatSeconds(r.prevBest - r.ms)} faster than your old best (${formatTime(r.prevBest)})!` : 'Your first time. Now try to beat it!'}</strong> +${TRIAL_RECORD_XP} XP</p>`
+              : `<p style="text-align:center">Your best is <strong>${formatTime(r.prevBest)}</strong>. ${formatSeconds(r.ms - r.prevBest)} to go!</p>`
+          }
+          <div class="row" style="justify-content:center;gap:24px"><span>🪙 +${t.earned.coins}</span><span>⭐ +${t.earned.xp + r.xp} XP</span></div>
+        </div>
+        ${friendSummaryHtml(t.friendsBefore, profile(), t.friendEvents)}
+        ${
+          slowest.length
+            ? `<div class="card"><h3>Slowest this time</h3><p>${slowest.map((x) => `${esc(x.fact.text)} = ${x.fact.answer} <span class="muted">(${formatSeconds(x.ms)})</span>`).join(' · ')}</p></div>`
+            : ''
+        }
+        <div class="row">
+          <button class="big" data-action="math-trial" data-key="${t.key}">Try again</button>
+          <button class="big secondary" data-action="go" data-to="math">🔢 Tables</button>
+          <button class="big secondary" data-action="go" data-to="hub">Home</button>
+        </div>`;
+    },
+
     'math-facts'() {
       const state = mathState(profile());
       const cell = (f, label) => {
@@ -173,10 +256,105 @@ export function initMath(ctx) {
         <div class="card"><p class="small">${state.mastered} facts mastered. Colors show stars:
           <span class="fc-key new">new</span><span class="fc-key b0">0</span><span class="fc-key b1">1</span><span class="fc-key b2">2</span>
           <span class="fc-key b3">3</span><span class="fc-key b4">4</span><span class="fc-key b5">5 ★</span></p></div>
+        ${slowestHtml(state)}
         <div class="card"><h3>× Multiply</h3><p class="small muted">Row × column. The number is the answer.</p>${mulGrid}</div>
         <div class="card"><h3>÷ Divide</h3><p class="small muted">The number in the box ÷ the row = the column.</p>${divGrid}</div>`;
     },
   };
+
+  function keypadHtml(copy) {
+    return `<div class="keypad">
+      ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button class="secondary" data-action="math-key" data-k="${n}">${n}</button>`).join('')}
+      <button class="secondary" data-action="math-key" data-k="del" aria-label="Delete">⌫</button>
+      <button class="secondary" data-action="math-key" data-k="0">0</button>
+      <button data-action="math-key" data-k="go" aria-label="Enter">${copy ? '🔒' : '⚡'}</button>
+    </div>`;
+  }
+
+  function slowestHtml(state) {
+    const slow = slowestFacts(state, 8);
+    if (!slow.length) return '';
+    return `<div class="card"><h3>🐢 Slowest facts</h3>
+      <p class="small muted">Average time for a right answer (recent tries count most). Practice these to speed them up!</p>
+      <div class="slow-list">${slow
+        .map((f) => `<div class="record"><strong>${esc(f.text)} = ${f.answer}</strong><span>${formatSeconds(f.item.avgMs)}</span></div>`)
+        .join('')}</div></div>`;
+  }
+
+  // ---------- time trials ----------
+  const trialElapsed = (t) => (t.endedAt ?? performance.now()) - t.startedAt + t.penalty;
+  let clockTimer = null;
+
+  function startTrial(key) {
+    const p = profile();
+    const facts = key === FINAL_KEY ? finalMissionFacts() : trialFacts(...key.split(':').map((x, i) => (i ? Number(x) : x)));
+    ui.math.trial = {
+      key,
+      facts,
+      i: 0,
+      typed: '',
+      penalty: 0,
+      misses: 0,
+      fix: false,
+      times: [],
+      earned: { coins: 0, xp: 0 },
+      powers: mathPowers(p),
+      friendsBefore: p,
+      friendEvents: [],
+      seconds: mathState(p).seconds,
+    };
+    ui.screen = 'math-trial';
+    render();
+    const t = ui.math.trial;
+    t.startedAt = t.factStart = performance.now();
+    clearInterval(clockTimer);
+    clockTimer = setInterval(() => {
+      const el = document.getElementById('trial-clock');
+      if (ui.screen !== 'math-trial' || ui.math.trial !== t || t.endedAt) return clearInterval(clockTimer);
+      if (el) el.textContent = formatTime(trialElapsed(t));
+    }, 100);
+  }
+
+  function trialSubmit() {
+    const t = ui.math.trial;
+    if (!t.typed) return;
+    const f = t.facts[t.i];
+    const now = performance.now();
+    const ms = now - t.factStart;
+    const right = Number(t.typed) === f.answer;
+    // Only the first try at each fact counts toward stars, coins and solve times.
+    if (!t.fix) {
+      const result = !right ? 'wrong' : ms > t.seconds * 1000 ? 'slow' : 'correct';
+      const rec = recordFact(profile(), f.id, result, { mode: 'speed', now: Date.now(), powers: t.powers, ms });
+      const grown = afterMathAnswer(rec.profile, rec.battleResult, false);
+      t.friendEvents.push(...grown.events);
+      update(grown.profile);
+      t.earned.coins += rec.coins + (rec.mastered ? FACT_MASTERY_COINS : 0);
+      t.earned.xp += rec.xp;
+      if (right) t.times.push({ fact: f, ms });
+      if (rec.mastered) floatText(`🌟 ${f.text} mastered!`);
+    }
+    if (!right) {
+      t.penalty += TRIAL_PENALTY_MS;
+      t.misses += t.fix ? 0 : 1;
+      Object.assign(t, { fix: true, typed: '', feedback: `+${TRIAL_PENALTY_MS / 1000}s`, feedbackClass: 'bad' });
+      render();
+      return;
+    }
+    t.i++;
+    Object.assign(t, { fix: false, typed: '', feedback: '', feedbackClass: '' });
+    if (t.i >= t.facts.length) {
+      t.endedAt = now;
+      const total = Math.round(trialElapsed(t));
+      const r = recordTrial(profile(), t.key, total);
+      update(r.profile);
+      t.result = { ...r, ms: total, prevBest: r.prevBest };
+      clearInterval(clockTimer);
+      return go('math-trial-done');
+    }
+    t.factStart = now;
+    render();
+  }
 
   // ---------- game flow ----------
   function startRound(mode) {
@@ -259,18 +437,28 @@ export function initMath(ctx) {
     go('math-summary');
   }
 
-  function showTyped() {
+  function showTyped(text = g().typed) {
     const el = document.getElementById('math-answer');
-    if (el) el.textContent = g().typed || '?';
+    if (el) el.textContent = text || '?';
   }
 
   function press(k) {
+    if (ui.screen === 'math-trial') return trialPress(k);
     const game = g();
     if (!game || ui.screen !== 'math-play' || game.phase === 'wait') return;
     if (k === 'go') return submit();
     if (k === 'del') game.typed = game.typed.slice(0, -1);
     else if (game.typed.length < 3) game.typed = game.typed === '0' ? String(k) : game.typed + k;
     showTyped();
+  }
+
+  function trialPress(k) {
+    const t = ui.math.trial;
+    if (!t || t.endedAt) return;
+    if (k === 'go') return trialSubmit();
+    if (k === 'del') t.typed = t.typed.slice(0, -1);
+    else if (t.typed.length < 3) t.typed = t.typed === '0' ? String(k) : t.typed + k;
+    showTyped(t.typed);
   }
 
   function submit() {
@@ -293,7 +481,7 @@ export function initMath(ctx) {
     const seconds = (performance.now() - game.startedAt) / 1000;
     const right = value === f.answer;
     const result = !right ? 'wrong' : game.usedHint ? 'hinted' : game.mode === 'speed' && seconds > game.seconds ? 'slow' : 'correct';
-    const rec = recordFact(profile(), f.id, result, { mode: game.mode, now: Date.now(), powers: game.powers });
+    const rec = recordFact(profile(), f.id, result, { mode: game.mode, now: Date.now(), powers: game.powers, ms: seconds * 1000 });
     const grown = afterMathAnswer(rec.profile, rec.battleResult, game.mode === 'practice');
     game.friendEvents.push(...grown.events);
     let p = grown.profile;
@@ -353,7 +541,7 @@ export function initMath(ctx) {
 
   // Number keys on a computer keyboard.
   document.addEventListener('keydown', (e) => {
-    if (ui.screen !== 'math-play' || e.metaKey || e.ctrlKey || e.altKey) return;
+    if ((ui.screen !== 'math-play' && ui.screen !== 'math-trial') || e.metaKey || e.ctrlKey || e.altKey) return;
     if (/^[0-9]$/.test(e.key)) press(e.key);
     else if (e.key === 'Backspace') press('del');
     else if (e.key === 'Enter') press('go');
@@ -373,6 +561,12 @@ export function initMath(ctx) {
       render();
     },
     'math-start': (d) => startRound(d.mode),
+    'math-trial': (d) => startTrial(d.key),
+    'math-trial-quit': () => {
+      clearInterval(clockTimer);
+      ui.math.trial = null;
+      go('math');
+    },
     'math-key': (d) => press(d.k),
     'math-hint': () => {
       const game = g();
@@ -394,6 +588,10 @@ export function initMath(ctx) {
     if (!kid) return '';
     const s = mathState(kid);
     const tricky = trickyFacts(s);
+    const slow = slowestFacts(s, 8);
+    const records = Object.entries(s.records)
+      .sort(([a], [b]) => (a === FINAL_KEY) - (b === FINAL_KEY) || a.localeCompare(b, undefined, { numeric: true }))
+      .map(([k, r]) => `${esc(trialTitle(k).replace(/^\S+ /, ''))}: ${formatTime(r.best)} <span class="small muted">(${r.runs} run${r.runs > 1 ? 's' : ''})</span>`);
     const row = (t) => {
       const m = tableSummary(s, 'mul', t);
       const dv = t ? tableSummary(s, 'div', t) : null;
@@ -407,6 +605,8 @@ export function initMath(ctx) {
       <p>${s.mastered} facts mastered · ${s.stats.correct}/${s.stats.answered} right overall</p>
       <div class="row"><span class="small">Speed mode time per question:</span>
         ${SECONDS_CHOICES.map((n) => `<button class="chip ${s.seconds === n ? 'selected' : ''}" data-action="math-seconds" data-id="${kid.id}" data-s="${n}">${n}s</button>`).join('')}</div>
+      ${slow.length ? `<p><strong>Slowest facts</strong> <span class="small muted">(average time for a right answer)</span>: ${slow.map((f) => `${esc(f.text)} ${formatSeconds(f.item.avgMs)}`).join(' · ')}</p>` : ''}
+      ${records.length ? `<p><strong>Time trial records:</strong> ${records.join(' · ')}</p>` : ''}
       ${tricky.length ? `<p><strong>Tricky facts:</strong> ${tricky.map((f) => `${esc(f.text)} = ${f.answer} <span class="small muted">(missed ${f.item.misses}×)</span>`).join(' · ')}</p>` : ''}
       <table><tr><th>Table</th><th>× mastered</th><th>÷ mastered</th></tr>${TABLES.map(row).join('')}</table>
       <p class="small muted">Facts 0–12, each with its own 0–${MAX_BOX} star rating like spelling words. Smart mix starts with the easy tables
@@ -416,5 +616,5 @@ export function initMath(ctx) {
     </div>`;
   }
 
-  return { screens, actions, parentHtml, isPlaying: () => ui.screen === 'math-play' };
+  return { screens, actions, parentHtml, isPlaying: () => ui.screen === 'math-play' || ui.screen === 'math-trial' };
 }
