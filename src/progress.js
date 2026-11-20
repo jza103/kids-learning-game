@@ -28,9 +28,9 @@ export function unlockedCosmetics(xp) {
   return COSMETICS.filter((c) => c.level <= level);
 }
 
-/** Sum the powers of the collectibles on the team. */
+/** Sum the powers of the collectibles on the team, ignoring game type and level. Games use teamPowersFor in friends.js. */
 export function teamPowers(team) {
-  const out = { hint: 0, power: 0, shield: 0, xp: 0 };
+  const out = { hint: 0, power: 0, shield: 0, xp: 0, buddy: 0 };
   for (const id of team.slice(0, TEAM_SIZE)) {
     const item = ITEMS_BY_ID[id];
     if (item) out[item.power] += RARITY_STRENGTH[item.rarity];

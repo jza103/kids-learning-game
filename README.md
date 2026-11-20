@@ -1,7 +1,7 @@
 # Kids Learning Game (working title)
 
 **Status:** spelling game live on GitHub Pages; word bank, mastery rewards and voice picker added
-**Created:** 2026-11-17  **Last updated:** 2026-11-19
+**Created:** 2026-11-17  **Last updated:** 2026-11-20
 
 _Moved from the `jza103/ideas` incubator repo on 2026-11-19._
 
@@ -25,7 +25,8 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - **Mastery = big rewards:** the first time a word reaches 5 stars, it pays 30 coins and 50 XP, and every 5 mastered words earn a **Super Pack** with a guaranteed **ultra** friend (2 per theme; not craftable, not in normal packs, not limited by the daily cap).
 - **Packs:** 60 coins, 3 per day, kid picks a theme (Ocean, Space, Forest; 10 friends each). Odds shown (65/28/7%). Rare+ guaranteed every 4 packs, epic every 12. Missing friends come before duplicates; duplicates give shards; shards craft any missing friend, so every set can be finished.
 - **Voice:** optional natural AI voice from ElevenLabs (Jason's choice, 2026-11-19). The parent pastes an API key on the grown-ups screen; the key stays on the device and is left out of backups. Audio for each word and sentence is fetched once, saved in Cache Storage (`spelling-audio`, kept across app updates), and played offline. Each request carries spelling-test context (`previous_text`), the word-sentence-word playback is one clip so the word sounds the same each time, and the voice is tuned steady and a little slow (`CLIP_STYLE` in `src/aivoice.js`; bump it to re-make clips). Audio no word needs any more is cleaned up. Anything without saved audio falls back to the best built-in voice. Note: iPad Safari doesn't expose downloaded Premium voices to web pages (WebKit bug 237584). Background: `docs/voice-options.md`.
-- **Collectibles have a purpose:** up to 3 on your team give powers (hints, damage, shields, XP boost). Finishing a theme gives a title and XP.
+- **Collectibles have a purpose:** up to 3 on your team give powers (hints, damage, shields, XP boost, friend boost). Finishing a theme gives a title and XP.
+- **Friends grow** (`src/friends.js`, 2026-11-20): each friend specializes in spelling, math or vocab, and its power only works in games it knows. Team friends get XP from answers (capped daily), level up, and evolve into ✨ Super Friends (level 5) and 💖 Best Friends (level 10), getting stronger. A friend brought to a game it doesn't know learns it over about a week of play. Other games plug in with `teamPowersFor` and `friendsAfterAnswer` (see `src/games.js`). Pacing math: `docs/friends-pacing.md`.
 - **XP / Locker:** cosmetic only (hero, hat, color, title).
 
 ## Hypothesis / what we're trying to prove
@@ -47,7 +48,9 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 
 ## Where we left off
 - Last done (2026-11-19): went live on GitHub Pages; added the growing word bank with mastery stars, Super Packs and ElevenLabs voice. Then, from Jason's listening: spelling-test context for AI clips, a live check of typed words with tips and a 🔊 preview per word, and ✕ now deletes a word completely (stars and audio). After the first playtest (iPhone): a miss shows the kid's attempt small and struck through under the correct spelling, and the grown-ups form has a word box plus an optional sentence box per word instead of the `|` syntax. Every way of adding words goes through `cleanEntries` in `src/profile.js`; `parseWordList` (pasted lists with `|`) is kept for bulk loading later.
+- Also (2026-11-20): friend specialties, XP, evolution and learning new games, with daily caps (`docs/friends-pacing.md`). Math and vocab games are being built in parallel and call the same friend hooks.
 - Next:
+  0. Jason: try friends with the kids; tune pacing numbers in `src/friends.js` if it's too slow or too fast.
   1. Jason: listen to the re-made clips; if a word still sounds odd, tune `WORD_CONTEXT`/`VOICE_SETTINGS` in `src/aivoice.js`.
   2. Play with the kids and tune the numbers in `src/economy.js`, `src/profile.js` (review mix) and `src/progress.js`.
   3. Math facts mode (same item model and scheduler).
@@ -58,7 +61,8 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 ## Key files
 - `index.html`, `styles.css`, `src/app.js` — the app UI
 - `src/srs.js`, `src/economy.js`, `src/progress.js`, `src/battle.js`, `src/profile.js` — game and learning logic (pure, tested in `test/`)
-- `src/content.js` — collectibles, monsters, cosmetics
+- `src/content.js` — collectibles (with specialty), monsters, cosmetics
+- `src/games.js`, `src/friends.js`, `src/friendsui.js` — game types, friend growth logic, shared friend UI snippets
 - `src/voices.js`, `src/speech.js`, `src/aivoice.js` — built-in voice ranking, speech playback, ElevenLabs audio
 - `docs/voice-options.md` — AI voice options for a decision
 - `sw.js`, `manifest.webmanifest`, `icons/` — offline and install support
