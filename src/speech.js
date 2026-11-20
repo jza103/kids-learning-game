@@ -1,9 +1,9 @@
 // Read words aloud. Uses saved ElevenLabs audio when it's set up and ready,
 // otherwise the browser's built-in voice (Web Speech API, works offline).
 import { bestVoice, rankVoices } from './voices.js';
-import { loadedClip, preload, wordClip, sentenceClip } from './aivoice.js';
+import { loadedClip, preload, wordClip, sentenceClip, meaningClip, definitionClip } from './aivoice.js';
 
-const prefs = { voiceURI: null, rate: 0.85, aiVoiceId: null };
+const prefs = { voiceURI: null, rate: 0.85, aiVoiceIds: [] };
 let voice = null;
 
 export function speechAvailable() {
@@ -14,9 +14,14 @@ function refresh() {
   if (speechAvailable()) voice = bestVoice(speechSynthesis.getVoices(), prefs.voiceURI);
 }
 
-/** aiVoiceId: the ElevenLabs voice to use, or null for the built-in voice. */
-export function setSpeechPrefs({ voiceURI = null, rate = 0.85, aiVoiceId = null } = {}) {
-  Object.assign(prefs, { voiceURI, rate, aiVoiceId });
+/**
+ * aiVoiceId: the ElevenLabs voice to use, or null for the built-in voice.
+ * listVoiceIds: voices whose audio came in word list files; used for any clip
+ * the main voice doesn't have, even on a device with no ElevenLabs key.
+ */
+export function setSpeechPrefs({ voiceURI = null, rate = 0.85, aiVoiceId = null, listVoiceIds = [] } = {}) {
+  const aiVoiceIds = [...new Set([aiVoiceId, ...listVoiceIds].filter(Boolean))];
+  Object.assign(prefs, { voiceURI, rate, aiVoiceIds });
   refresh();
 }
 
@@ -57,7 +62,7 @@ export function unlockAudio() {
 
 /** Get saved AI clips into memory ahead of time. */
 export function preloadSpeech(specs) {
-  return prefs.aiVoiceId ? preload(prefs.aiVoiceId, specs).catch(() => {}) : Promise.resolve();
+  return Promise.all(prefs.aiVoiceIds.map((v) => preload(v, specs).catch(() => {})));
 }
 
 let token = 0;
@@ -102,6 +107,16 @@ export function saySentence(word, sentence) {
   return speak([{ clip: sentenceClip(word, sentence), phrases: [word, sentence, word] }], true);
 }
 
+/** Say a Word Match word and what it means. */
+export function sayMeaning(word, definition) {
+  return speak([{ clip: meaningClip(word, definition), phrases: [word, definition] }], true);
+}
+
+/** Read out meanings one after another. */
+export function sayDefinitions(definitions) {
+  return speak(definitions.map((d) => ({ clip: definitionClip(d), phrases: [d] })), true);
+}
+
 /** Always the built-in voice (for testing it). */
 export function sayBuiltIn(...phrases) {
   return speak([{ clip: null, phrases }], false);
@@ -113,7 +128,7 @@ async function speak(parts, allowAi) {
   audio?.pause();
   for (const { clip, phrases } of parts) {
     if (my !== token) return;
-    const url = allowAi && audio && loadedClip(prefs.aiVoiceId, clip);
+    const url = allowAi && audio && prefs.aiVoiceIds.map((v) => loadedClip(v, clip)).find(Boolean);
     if (url && (await playClip(url, my))) continue;
     for (const text of phrases.filter(Boolean)) {
       if (my !== token) return;

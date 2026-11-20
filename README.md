@@ -1,7 +1,7 @@
 # Kids Learning Game (working title)
 
 **Status:** spelling game and times tables game live on GitHub Pages
-**Created:** 2026-11-17  **Last updated:** 2026-11-21 (mining theme 2026-11-20)
+**Created:** 2026-11-17  **Last updated:** 2026-11-21 (word lists library 2026-11-20)
 
 _Moved from the `jza103/ideas` incubator repo on 2026-11-19._
 
@@ -39,6 +39,13 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - For a kid who no longer gets school spelling words (Jason's 5th grader, 2026-11-20). 200 commonly misspelled and tricky words in 20 sets of 10, each set sharing a pattern (ough words, i before e, sound-alikes like their/there/they're, -able/-ible, silent letters...) with a sentence per word and a spelling tip per set. Later sets are 6th-grade and stretch words. List in `src/tricky-words.js`, logic in `src/tricky.js` (tested in `test/tricky.test.js`).
 - Grown-ups screen: a checkbox per kid. Turning it on adds set 1 as this week's words; after that the next set is added the first time the kid opens the game a week or more later (never more than one at a time, so a break doesn't pile up words). "Add the next set now" skips ahead.
 - The words are normal word-bank words: same stars, coins, mastery rewards and Super Packs, and older sets come back for review. No slowdown for fast learners: once every word of this week's set has 3+ stars, the kid sees a "Ready for 10 more tricky words" button on the home screen.
+
+## Word lists library (grown-ups, 2026-11-20)
+- **Built in:** 3 weeks each for grades 3, 4, 5 and 6 (`src/word-lists-builtin.js`). Each week has 12 spelling words with a sentence and a pattern tip (long a, vowel teams, prefixes, -tion/-sion, roots, silent letters, sound-alikes...) and 8 Word Match words with kid-friendly meanings. Tests check every sentence uses its word, no meaning uses its word, and no word repeats within a grade.
+- **Give a list to a kid:** Grown-ups → 📚 Word lists → open a grade → "Spelling words for <kid>" (becomes this week's words, same as typing them) or "Add to <kid>'s Word Match". The library shows when each kid was given a list.
+- **Load a list** (a teacher's list, format unknown yet): choose a file or paste. Reads our own list files, other JSON, CSV/TSV with or without a header row (word / sentence / definition / week / grade columns), and plain text: one word per line, numbered or bulleted, with an optional sentence or meaning after a dash, colon or tab; "Week 2"/"Unit 3" headings start a new list and "Spelling"/"Vocabulary" headings say what follows. "What's in it?" forces spelling or Word Match when the guess is wrong (a text after a word that uses the word is a sentence, otherwise a meaning). A preview shows what was found before saving. Loading a list with the same name replaces it. Logic in `src/wordlists.js` (tested in `test/wordlists.test.js`), UI in `src/wordlists-ui.js`.
+- **Voices made once, shared as a file:** on a device with the ElevenLabs key, "🔊 Make voices" makes the audio for a grade's lists, and "💾 Save as a file with voices" saves the lists plus their audio (base64 mp3) in one `.json`. Loading that file on another device saves the audio there, and the game plays it even with no key on that device (`settings.ai.listVoices`). From a computer instead: `ELEVENLABS_API_KEY=... node tools/make-voices.mjs [--grade 3] [--in teacher.txt --name "..."] [--voice <id>]` writes the same kind of file (`--dry` counts characters; a stopped run picks up where it left off). All 12 built-in lists are about 16,500 ElevenLabs characters (576 clips).
+- Word Match now uses the AI voice too: the word, "word ... meaning", and the meanings read out on a board each have a clip. New clips are 64 kbps (`OUTPUT_FORMAT`) to keep list files small.
 
 ## How the times tables game works
 - **Facts:** × and ÷ tables 0–12 (169 × facts, 156 ÷ facts, no ÷0). Each fact has its own 0–5 star rating, using the same scheduler as spelling words (`src/math.js`, stored in `profile.math`).
@@ -94,7 +101,8 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - **Randomized rewards: decided (2026-11-19)** after Jason tested Blooket with the kids: collectibles with rarity via packs, kept mild. Odds shown, pity guarantees, duplicates → shards, daily cap, kid picks a theme, collectibles give in-game powers and fill a collection book, coins only from correct answers (missed words pay more, mastered less), parent writes the content. Background in `appeal-analysis.md`.
 
 ## Where we left off
-- Last done (2026-11-20): mining theme (Jason): Gem Dig, Ore Sorting and Mine Cart Run replace the monster battle in all three games. Scoring unchanged. Checked at phone, iPad and desktop sizes in a headless browser; not yet tried by the kids.
+- Last done (2026-11-20): word lists library (Jason): built-in lists for grades 3–6 (3 weeks each, spelling + Word Match), loading a teacher's list from a file or paste, and AI voices made once and shared as a list file. Checked in a headless browser at phone size; voices for the built-in lists not made yet (needs Jason's key: "Make voices" on his iPad, or the `tools/make-voices.mjs` script).
+- Before that (2026-11-20): mining theme (Jason): Gem Dig, Ore Sorting and Mine Cart Run replace the monster battle in all three games. Scoring unchanged. Checked at phone, iPad and desktop sizes in a headless browser; not yet tried by the kids.
 - Before that (2026-11-20): from the year sim, Jason switched on one star a day (spelling, Word Match) with softer misses, and the Grove is paced over the school year (calendar lands, rising level cost, daily market limit, fewer trip shards).
 - Before that (2026-11-20): school-year simulator (`sim/`) and the clear fixes it found: farm XP only from Sunshine, warm-ups rest a month, Week Stars for any finished list, no double mastery pay.
 - Before that (2026-11-21): Workshop shows sell prices and profit, "Sell for 🔔" on the spot, and a shelf to sell crafts (crafting never cost Bells; Build still does). Before that, Pour button gains "Pour N, finishes the next thing" next to Pour all. Before that, Friend Grove round 4: Friends roster tab, friend energy and farm ranks (rotation), and a grown-ups button to add Sunshine (+10/+50/+200) for testing.
@@ -130,6 +138,7 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - `src/content.js` — collectibles (with specialty), mining targets, cosmetics
 - `src/games.js`, `src/friends.js`, `src/friendsui.js` — game types, friend growth logic, shared friend UI snippets
 - `src/voices.js`, `src/speech.js`, `src/aivoice.js` — built-in voice ranking, speech playback, ElevenLabs audio
+- `src/wordlists.js`, `src/wordlists-ui.js`, `src/word-lists-builtin.js`, `tools/make-voices.mjs` — word lists library, list file reading, built-in grade 3–6 lists, voice file maker
 - `docs/voice-options.md` — AI voice options for a decision
 - `sw.js`, `manifest.webmanifest`, `icons/` — offline and install support
 - `recon.md` — competitor notes, dark patterns to avoid, basic design ideas

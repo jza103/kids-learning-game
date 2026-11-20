@@ -6,6 +6,8 @@
 export const AUDIO_CACHE = 'spelling-audio';
 export const MODEL_ID = 'eleven_multilingual_v2';
 const API = 'https://api.elevenlabs.io/v1';
+// 64 kbps is plenty for a voice and keeps shared list files small.
+export const OUTPUT_FORMAT = 'mp3_44100_64';
 const KEY_STORE = 'klg-elevenlabs-key';
 
 // ---------- pure helpers (tested) ----------
@@ -46,6 +48,38 @@ export function sentenceClip(word, sentence) {
   const w = cleanWord(word);
   const s = cleanSentence(sentence);
   return { id: `v${CLIP_STYLE}/sentence/${w}/${s}`, text: `${w}. ${PAUSE} ${s} ${PAUSE} ${w}.`, previous: SENTENCE_CONTEXT };
+}
+
+// Word Match clips: the word then its meaning in one clip, and the meaning on
+// its own (for reading out the meanings on a board).
+export const MEANING_CONTEXT = 'Vocabulary practice. I will say the word, then what it means.';
+export const DEFINITION_CONTEXT = 'Vocabulary practice. This is what a word means:';
+
+export function meaningClip(word, definition) {
+  const w = cleanWord(word);
+  const d = cleanSentence(definition);
+  return { id: `v${CLIP_STYLE}/meaning/${w}/${d}`, text: `${w}. ${PAUSE} ${d}`, previous: MEANING_CONTEXT };
+}
+
+export function definitionClip(definition) {
+  const d = cleanSentence(definition);
+  return { id: `v${CLIP_STYLE}/definition/${d}`, text: d, previous: DEFINITION_CONTEXT };
+}
+
+/** The clips a Word Match word needs: the word, word + meaning, and the meaning alone. */
+export function clipsForVocab(w) {
+  if (!cleanWord(w.word)) return [];
+  const out = [wordClip(w.word)];
+  if (normalizeText(w.definition)) out.push(meaningClip(w.word, w.definition), definitionClip(w.definition));
+  return out;
+}
+
+/** Every clip a word list needs (spelling and Word Match), without repeats. */
+export function clipsForList(list) {
+  const out = new Map();
+  for (const w of list.spelling || []) for (const c of clipsForWord(w)) out.set(c.id, c);
+  for (const w of list.vocab || []) for (const c of clipsForVocab(w)) out.set(c.id, c);
+  return [...out.values()];
 }
 
 /** Cache key for a clip. Not a real URL; it only names the stored audio. */
@@ -168,7 +202,7 @@ export function clipRequest(spec) {
 /** spec: a clip from wordClip/sentenceClip, or plain text. */
 export async function generateClip(key, voiceId, spec) {
   const clip = typeof spec === 'string' ? { text: normalizeText(spec) } : spec;
-  const res = await api(`/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, key, {
+  const res = await api(`/text-to-speech/${encodeURIComponent(voiceId)}?output_format=${OUTPUT_FORMAT}`, key, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
     body: JSON.stringify(clipRequest(clip)),
@@ -186,6 +220,19 @@ async function audioCache() {
 export async function hasClip(voiceId, spec) {
   if (typeof caches === 'undefined') return false;
   return Boolean(await (await audioCache()).match(clipUrl(voiceId, spec.id)));
+}
+
+/** Save a clip (e.g. one that came in a word list file). */
+export async function putClip(voiceId, clipId, blob) {
+  if (typeof caches === 'undefined') return;
+  await (await audioCache()).put(clipUrl(voiceId, clipId), new Response(blob, { headers: { 'Content-Type': 'audio/mpeg' } }));
+}
+
+/** A saved clip's audio, or null. */
+export async function getClip(voiceId, clipId) {
+  if (typeof caches === 'undefined') return null;
+  const res = await (await audioCache()).match(clipUrl(voiceId, clipId));
+  return res ? res.blob() : null;
 }
 
 /** Count how many of these clips are already saved for this voice. */

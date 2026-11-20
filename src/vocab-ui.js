@@ -7,7 +7,8 @@ import { XP_PER, applyXpBoost, levelForXp } from './progress.js';
 import { teamPowersFor, friendsAfterAnswer } from './friends.js';
 import { teamLineHtml, friendSummaryHtml } from './friendsui.js';
 import { newBattle, applyAnswer } from './battle.js';
-import { sayWord, sayBuiltIn, unlockAudio } from './speech.js';
+import { sayWord, sayMeaning, sayDefinitions, unlockAudio, preloadSpeech } from './speech.js';
+import { clipsForVocab } from './aivoice.js';
 import {
   vocabOf, vocabItems, pickBoard, shuffle, recordMatch, addVocabWord, removeVocabWord, restoreStarterWords,
   vocabEntryWarnings, BOARD_SIZE, BOARDS_PER_ROUND, MAX_NEW_PER_ROUND, MIN_WORDS, VOCAB_COIN_SCALE,
@@ -28,6 +29,7 @@ export function createVocab(ctx) {
     const p = ctx.profile();
     if (vocabItems(p).length < MIN_WORDS) return;
     unlockAudio();
+    preloadSpeech(vocabOf(p).words.flatMap(clipsForVocab));
     const powers = powersFor(p);
     ui.vocab = {
       powers,
@@ -289,7 +291,7 @@ export function createVocab(ctx) {
     'vocab-say': (d) => {
       unlockAudio();
       const w = vocabOf(ctx.profile()).words.find((x) => x.id === d.id);
-      if (w) sayBuiltIn(w.word, w.definition);
+      if (w) sayMeaning(w.word, w.definition);
     },
     'vocab-word': (d) => {
       const s = g();
@@ -330,7 +332,7 @@ export function createVocab(ctx) {
     'vocab-read': () => {
       unlockAudio();
       const b = g().board;
-      sayBuiltIn(...b.defs.filter((d) => !b.matched.includes(d.id) && !b.hidden.includes(d.id)).map((d) => d.definition));
+      sayDefinitions(b.defs.filter((d) => !b.matched.includes(d.id) && !b.hidden.includes(d.id)).map((d) => d.definition));
     },
     // Grown-ups editor
     'vocab-edit': (d) => {
@@ -355,7 +357,7 @@ export function createVocab(ctx) {
       const w = vocabOf(ctx.parentKid()).words.find((x) => x.id === d.id);
       if (w) {
         unlockAudio();
-        sayBuiltIn(w.word, w.definition);
+        sayMeaning(w.word, w.definition);
       }
     },
     'vocab-restore': () => {
