@@ -3,7 +3,7 @@
 // spelling words, with the same 0-5 star spaced-repetition mastery. All
 // functions are pure: they take a profile and return a new one.
 import { newItem, review, pickNext } from './srs.js';
-import { coinsForAnswer, rewardMastery } from './economy.js';
+import { coinsForAnswer, earnCoins, rewardMastery } from './economy.js';
 import { XP_PER, applyXpBoost } from './progress.js';
 import { normalize } from './profile.js';
 import { STARTER_VOCAB } from './vocab-words.js';
@@ -146,15 +146,15 @@ export function recordMatch(profile, id, result, now, powers = { xp: 0 }) {
   const v = vocabOf(profile);
   const before = v.srs[id];
   if (!before) throw new Error(`unknown vocabulary word: ${id}`);
-  const coins = coinsForMatch(before, result);
+  const paid = earnCoins(profile, coinsForMatch(before, result), now);
+  const coins = paid.coins;
   const after = review(before, result, now);
   const mastered = before.masteredAt == null && after.masteredAt != null;
   const xp = applyXpBoost(XP_PER[result] + (mastered ? XP_PER.mastered : 0), powers);
   const stats = profile.vocabStats || { answered: 0, correct: 0 };
   let next = {
-    ...profile,
+    ...paid.profile,
     vocab: { ...v, srs: { ...v.srs, [id]: after } },
-    coins: profile.coins + coins,
     xp: profile.xp + xp,
     vocabStats: { answered: stats.answered + 1, correct: stats.correct + (result === 'correct' ? 1 : 0) },
   };

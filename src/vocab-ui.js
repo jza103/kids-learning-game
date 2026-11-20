@@ -2,7 +2,7 @@
 // games can grow side by side; app.js passes in its shared helpers as `ctx`.
 import { MONSTERS } from './content.js';
 import { masteryRating, masterySummary, MAX_BOX } from './srs.js';
-import { MASTERY_COINS } from './economy.js';
+import { MASTERY_COINS, coinPaceNote } from './economy.js';
 import { XP_PER, applyXpBoost, levelForXp } from './progress.js';
 import { teamPowersFor, friendsAfterAnswer } from './friends.js';
 import { teamLineHtml, friendSummaryHtml } from './friendsui.js';
@@ -265,6 +265,7 @@ export function createVocab(ctx) {
           </div>
           ${mastered.length ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((w) => `“${esc(w.word)}”`).join(', ')}!</strong> +${MASTERY_COINS * mastered.length} 🪙</p>` : ''}
           ${ctx.superProgressHtml(p)}
+          ${coinPaceNote(p, Date.now()) ? `<p class="small muted">${coinPaceNote(p, Date.now())}</p>` : ''}
           ${s.levelUp ? `<p style="font-size:1.3rem"><strong>Level up! You're level ${levelForXp(p.xp)}.</strong> Check the Locker for new stuff.</p>` : ''}
         </div>
         ${friendSummaryHtml(s.friendsBefore, p, s.friendEvents)}

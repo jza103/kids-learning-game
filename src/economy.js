@@ -18,8 +18,59 @@ export function coinsForAnswer(itemBefore, result) {
   return result === 'assisted' ? Math.floor(coins / 2) : coins;
 }
 
+// --- Daily coin pace: answers pay less after a lot of play in one day. ---
+// Shared by every game. Counts coins paid for answers (mastery rewards are
+// paid in full and don't count). The first 300 coins a day pay in full, then
+// half, then 1 coin per correct answer, and after DAILY_COIN_MAX the coin bag
+// is full until tomorrow (XP and friend XP still count). Resets each day;
+// coins already earned are never taken away.
+export const DAILY_COIN_MAX = 600;
+export const COIN_PACE = [
+  { upTo: 300, rate: 1 },
+  { upTo: 500, rate: 0.5 },
+  { upTo: DAILY_COIN_MAX, rate: 0 }, // 0 = trickle: 1 coin per paying answer
+];
+
+export function coinsToday(profile, now) {
+  const d = profile.coinDay;
+  return d && d.day === dayKey(now) ? d.earned : 0;
+}
+
+/** The pace tier for today: { rate, upTo, earned, full }. full = no more coins today. */
+export function coinPace(profile, now) {
+  const earned = coinsToday(profile, now);
+  const tier = COIN_PACE.find((t) => earned < t.upTo);
+  return tier ? { ...tier, earned, full: false } : { rate: 0, upTo: DAILY_COIN_MAX, earned, full: true };
+}
+
+/**
+ * Pay `base` coins for an answer, slowed by today's pace. Returns
+ * { profile, coins } with profile.coins and profile.coinDay updated.
+ */
+export function earnCoins(profile, base, now) {
+  if (!(base > 0)) return { profile, coins: 0 };
+  const { rate, earned, full } = coinPace(profile, now);
+  if (full) return { profile, coins: 0 };
+  const coins = rate === 0 ? 1 : Math.max(1, Math.round(base * rate));
+  return {
+    profile: { ...profile, coins: profile.coins + coins, coinDay: { day: dayKey(now), earned: earned + coins } },
+    coins,
+  };
+}
+
+/** A friendly line for results screens once coins slow down today, else ''. */
+export function coinPaceNote(profile, now) {
+  const pace = coinPace(profile, now);
+  if (pace.full) return `🪙 Your coin bag is full for today (${DAILY_COIN_MAX} coins). XP and friend XP still count. More coins tomorrow!`;
+  if (pace.rate === 0) return '🪙 Lots of coins today! Answers pay 1 coin for the rest of the day. Full coins again tomorrow.';
+  if (pace.rate < 1) return '🪙 Lots of coins today! Answers pay half for the rest of the day. Full coins again tomorrow.';
+  return '';
+}
+
 // --- Packs ---
-export const PACK_COST = 60;
+// Packs get pricier the more you open in a day (resets daily).
+export const PACK_COSTS = [60, 60, 80, 100, 120];
+export const PACK_COST = PACK_COSTS[0];
 export const DAILY_PACK_CAP = 5;
 export const ODDS = { common: 0.65, rare: 0.28, epic: 0.07 };
 // A rare-or-better is guaranteed at least once every RARE_PITY packs, and an
@@ -38,9 +89,16 @@ export function packsLeftToday(profile, now) {
   return p.day === dayKey(now) ? Math.max(0, DAILY_PACK_CAP - p.openedToday) : DAILY_PACK_CAP;
 }
 
+/** What the next pack costs today. */
+export function packCost(profile, now) {
+  const p = profile.packs;
+  const opened = p.day === dayKey(now) ? p.openedToday : 0;
+  return PACK_COSTS[Math.min(opened, PACK_COSTS.length - 1)];
+}
+
 export function canOpenPack(profile, now) {
   if (packsLeftToday(profile, now) <= 0) return { ok: false, reason: 'cap' };
-  if (profile.coins < PACK_COST) return { ok: false, reason: 'coins' };
+  if (profile.coins < packCost(profile, now)) return { ok: false, reason: 'coins' };
   return { ok: true };
 }
 
@@ -84,7 +142,7 @@ export function openPack(profile, themeId, now, rng = Math.random) {
 
   const next = {
     ...profile,
-    coins: profile.coins - PACK_COST,
+    coins: profile.coins - packCost(profile, now),
     shards: profile.shards + shards,
     collection: { ...profile.collection, [item.id]: (profile.collection[item.id] || 0) + 1 },
     packs: {

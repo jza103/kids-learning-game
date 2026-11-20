@@ -1,7 +1,7 @@
 // Per-kid profile: their word list, spaced-repetition state, wallet,
 // collection and cosmetics.
 import { newItem, review, isDue, pickNext } from './srs.js';
-import { coinsForAnswer, newPackState, rewardMastery } from './economy.js';
+import { coinsForAnswer, earnCoins, newPackState, rewardMastery } from './economy.js';
 import { XP_PER, applyXpBoost } from './progress.js';
 
 export function newProfile(name, now, id = `kid-${now.toString(36)}`) {
@@ -198,14 +198,14 @@ export function pickPracticeWord(profile, now, rng = Math.random, recent = [], r
 export function recordAnswer(profile, wordId, result, now, powers = { xp: 0 }) {
   const before = profile.srs[wordId];
   if (!before) throw new Error(`unknown word: ${wordId}`);
-  const coins = coinsForAnswer(before, result);
+  const paid = earnCoins(profile, coinsForAnswer(before, result), now);
+  const coins = paid.coins;
   const after = review(before, result, now);
   const mastered = before.masteredAt == null && after.masteredAt != null;
   const xp = applyXpBoost(XP_PER[result] + (mastered ? XP_PER.mastered : 0), powers);
   let next = {
-    ...profile,
+    ...paid.profile,
     srs: { ...profile.srs, [wordId]: after },
-    coins: profile.coins + coins,
     xp: profile.xp + xp,
     stats: {
       answered: profile.stats.answered + 1,

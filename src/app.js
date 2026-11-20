@@ -2,7 +2,7 @@
 import { THEMES, ITEMS_BY_ID, POWER_INFO, COSMETICS, MONSTERS } from './content.js';
 import { masterySummary, masteryRating, MAX_BOX } from './srs.js';
 import {
-  BOX_COINS, COMEBACK_BONUS, PACK_COST, DAILY_PACK_CAP, ODDS, CRAFT_COST, SHARDS_FOR_DUPLICATE,
+  BOX_COINS, COMEBACK_BONUS, PACK_COSTS, packCost, coinPaceNote, COIN_PACE, DAILY_COIN_MAX, DAILY_PACK_CAP, ODDS, CRAFT_COST, SHARDS_FOR_DUPLICATE,
   RARE_PITY, EPIC_PITY, canOpenPack, openPack, craft, packsLeftToday, pityStatus, themeProgress,
   MASTERY_COINS, SUPER_PACK_EVERY, openSuperPack,
 } from './economy.js';
@@ -200,6 +200,7 @@ const screens = {
             : ''
         }
         ${superProgressHtml(p)}
+        ${coinPaceNote(p, Date.now()) ? `<p class="small muted">${coinPaceNote(p, Date.now())}</p>` : ''}
         ${g.levelUp ? `<p style="font-size:1.3rem"><strong>Level up! You're level ${levelForXp(p.xp)}.</strong> Check the Locker for new stuff.</p>` : ''}
       </div>
       ${
@@ -254,10 +255,11 @@ const screens = {
           }).join('')}
         </div>
         <div class="row" style="margin-top:16px">
-          <button class="big" data-action="open-pack" ${check.ok ? '' : 'disabled'}>Open ${theme.emoji} pack · 🪙 ${PACK_COST}</button>
+          <button class="big" data-action="open-pack" ${check.ok ? '' : 'disabled'}>Open ${theme.emoji} pack · 🪙 ${packCost(p, now)}</button>
           <span class="muted">${left} of ${DAILY_PACK_CAP} packs left today</span>
         </div>
-        ${check.reason === 'coins' ? `<p class="muted">You need ${PACK_COST - p.coins} more coins. Spell words to earn them!</p>` : ''}
+        ${check.reason === 'coins' ? `<p class="muted">You need ${packCost(p, now) - p.coins} more coins. Spell words to earn them!</p>` : ''}
+        <p class="small muted">Packs today cost ${PACK_COSTS.slice(0, DAILY_PACK_CAP).join(', ')} coins. Back to ${PACK_COSTS[0]} tomorrow.</p>
         ${check.reason === 'cap' ? '<p class="muted">That\'s all the packs for today. More tomorrow!</p>' : ''}
         ${themeProgress(theme, p.collection).complete ? '<p class="muted">You have every friend in this theme, so packs here give shards.</p>' : ''}
       </div>
@@ -454,7 +456,8 @@ const screens = {
         <p>Coins only come from correct answers, never from finishing a round. A word pays by how well it's known:
           ${BOX_COINS.join(', ')} coins from new to mastered, plus ${COMEBACK_BONUS} for getting a recently missed word right.
           Using a hint pays half. XP (${XP_PER.correct} per correct answer, ${XP_PER.monster} per monster) only unlocks looks in the Locker.</p>
-        <p>Packs cost ${PACK_COST} coins, with at most ${DAILY_PACK_CAP} a day. Odds: ${Object.entries(ODDS)
+        <p>Coins slow down after a lot of play in one day: the first ${COIN_PACE[0].upTo} coins pay in full, then answers pay half until ${COIN_PACE[1].upTo}, then 1 coin each until ${DAILY_COIN_MAX}, when the coin bag is full until tomorrow. Mastery rewards always pay in full.</p>
+        <p>At most ${DAILY_PACK_CAP} packs a day, and each one costs a bit more than the last: ${PACK_COSTS.slice(0, DAILY_PACK_CAP).join(', ')} coins, back to ${PACK_COSTS[0]} the next day. Odds: ${Object.entries(ODDS)
           .map(([k, v]) => `${k} ${Math.round(v * 100)}%`)
           .join(', ')}. A rare or better is guaranteed every ${RARE_PITY} packs and an epic every ${EPIC_PITY}.
           Missing friends always come before duplicates, duplicates become shards, and shards can make any missing friend except ultras.
