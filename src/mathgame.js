@@ -12,7 +12,7 @@ import {
   FACT_MASTERY_COINS, FACTS_PER_SUPER_STEP, mathState, poolFor, pickFact, recordFact, maybeUnlock, unlockedTables,
   tableSummary, trickyFacts, factHint, factById, itemFor, tableFacts,
   slowestFacts, formatSeconds, formatTime, trialKey, trialFacts, finalMissionFacts, recordTrial, FINAL_KEY, FINAL_LENGTH,
-  TRIAL_PENALTY_MS, TRIAL_RECORD_XP,
+  TRIAL_PENALTY_MS, TRIAL_RECORD_XP, WARMUP_MAX_BOX, trackedFacts,
 } from './math.js';
 
 // ---- Friend hooks: only friends that know math give powers here; all of them learn. ----
@@ -328,7 +328,7 @@ export function initMath(ctx) {
     if (!t.fix) {
       const result = !right ? 'wrong' : ms > t.seconds * 1000 ? 'slow' : 'correct';
       const rec = recordFact(profile(), f.id, result, { mode: 'speed', now: Date.now(), powers: t.powers, ms });
-      const grown = afterMathAnswer(rec.profile, rec.battleResult, false);
+      const grown = afterMathAnswer(rec.profile, rec.battleResult, rec.warmup);
       t.friendEvents.push(...grown.events);
       update(grown.profile);
       t.earned.coins += rec.coins + (rec.mastered ? FACT_MASTERY_COINS : 0);
@@ -484,7 +484,7 @@ export function initMath(ctx) {
     const right = value === f.answer;
     const result = !right ? 'wrong' : game.usedHint ? 'hinted' : game.mode === 'speed' && seconds > game.seconds ? 'slow' : 'correct';
     const rec = recordFact(profile(), f.id, result, { mode: game.mode, now: Date.now(), powers: game.powers, ms: seconds * 1000 });
-    const grown = afterMathAnswer(rec.profile, rec.battleResult, game.mode === 'practice');
+    const grown = afterMathAnswer(rec.profile, rec.battleResult, game.mode === 'practice' || rec.warmup);
     game.friendEvents.push(...grown.events);
     let p = grown.profile;
     game.earned.coins += rec.coins;
@@ -599,8 +599,8 @@ export function initMath(ctx) {
       const dv = t ? tableSummary(s, 'div', t) : null;
       const open = (op) => unlockedTables(s, op).includes(t);
       return `<tr><td><strong>${t}s</strong></td>
-        <td>${m.mastered}/${m.total} <span class="small muted">${m.seen ? `${m.seen} tried` : open('mul') ? 'open' : ''}</span></td>
-        <td>${dv ? `${dv.mastered}/${dv.total} <span class="small muted">${dv.seen ? `${dv.seen} tried` : open('div') ? 'open' : ''}</span>` : '—'}</td></tr>`;
+        <td>${m.total ? `${m.mastered}/${m.total}` : 'warm-up'} <span class="small muted">${m.seen ? `${m.seen} tried` : open('mul') ? 'open' : ''}</span></td>
+        <td>${dv ? `${dv.total ? `${dv.mastered}/${dv.total}` : 'warm-up'} <span class="small muted">${dv.seen ? `${dv.seen} tried` : open('div') ? 'open' : ''}</span>` : '—'}</td></tr>`;
     };
     return `<div class="card">
       <h3>Times tables for ${esc(kid.name)}</h3>
@@ -614,7 +614,7 @@ export function initMath(ctx) {
       <p class="small muted">Facts 0–12, each with its own 0–${MAX_BOX} star rating like spelling words. Smart mix starts with the easy tables
         (${UNLOCK_ORDER.mul.slice(0, 5).join(', ')}) and opens the next one when most open facts have 2 stars; kids can also pick any single table.
         Practice has no timer, pays half and stops at ${PRACTICE_MAX_BOX} stars. Speed mode pays full, and a right answer only adds a star when it's in time,
-        so mastered means fast recall. Each mastered fact pays ${FACT_MASTERY_COINS} coins once, and every ${FACTS_PER_SUPER_STEP} mastered facts fill one Super Pack dot.</p>
+        so mastered means fast recall. Facts with a 0, 1 or 2 in them (like 5 × 0 or 14 ÷ 2) are warm-ups: they pay no coins, stop at ${WARMUP_MAX_BOX} stars and don't count toward mastery, so the ${trackedFacts('mul').length + trackedFacts('div').length} facts that count use only 3–12. Each mastered fact pays ${FACT_MASTERY_COINS} coins once, and every ${FACTS_PER_SUPER_STEP} mastered facts fill one Super Pack dot.</p>
     </div>`;
   }
 

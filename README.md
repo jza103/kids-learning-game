@@ -34,6 +34,7 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - **Facts:** × and ÷ tables 0–12 (169 × facts, 156 ÷ facts, no ÷0). Each fact has its own 0–5 star rating, using the same scheduler as spelling words (`src/math.js`, stored in `profile.math`).
 - **Modes:** Multiply, Divide, and Mixed (advanced). Kids pick "Smart mix" or any single table. Smart mix starts with 0, 1, 2, 10, 5 and opens the next table when 80% of open facts have 2+ stars. At most 5 new facts per round.
 - **Practice vs Speed:** Practice has no timer, pays half coins and XP, and can take a fact only up to 3 stars. Speed gives a time per question (6 s default; the grown-ups screen offers 4–15 s). A right answer in time adds a star; a right answer after the timer still hits the monster but counts like a hinted answer (no star, half coins). So 5 stars means fast recall.
+- **Warm-ups (2026-11-20):** any fact with a 0, 1 or 2 (5 × 0, 7 × 1, 14 ÷ 2, 12 ÷ 6) is a warm-up: no coins, at most 2 stars (so Smart mix still opens tables), never mastered, half friend XP. A tester ground the 0s for coins. The facts that count are the 100 × and 100 ÷ facts with both numbers 3–12 (`isWarmup`, `trackedFacts` in `src/math.js`).
 - **Anti-grind:** answering a fact before it's due pays 2 coins and adds no star. Mastering a fact pays 15 coins once, and every 2 mastered facts fill one Super Pack dot (shared with spelling).
 - **Play:** 12-question monster battle with an on-screen number pad (keyboard digits and Enter work on a computer). A miss shows the right fact big and what the kid typed small and crossed out, then they type the answer once to lock it in. Hint = a skip-counting clue.
 - **Friend hooks:** `mathPowers()` and `afterMathAnswer()` at the top of `src/mathgame.js` are where game-type-aware friend powers plug in.
@@ -65,7 +66,8 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - **Randomized rewards: decided (2026-11-19)** after Jason tested Blooket with the kids: collectibles with rarity via packs, kept mild. Odds shown, pity guarantees, duplicates → shards, daily cap, kid picks a theme, collectibles give in-game powers and fill a collection book, coins only from correct answers (missed words pay more, mastered less), parent writes the content. Background in `appeal-analysis.md`.
 
 ## Where we left off
-- Last done (2026-11-20): daily coin pace (full to 300, half to 500, 1 each to 600, then full for the day) and rising pack prices (60, 60, 80, 100, 120), after a tester earned 1,000+ coins in 30 minutes.
+- Last done (2026-11-20): facts with 0, 1 or 2 became warm-ups (no coins or mastery), after a tester ground the 0s table.
+- Before that (2026-11-20): daily coin pace (full to 300, half to 500, 1 each to 600, then full for the day) and rising pack prices (60, 60, 80, 100, 120), after a tester earned 1,000+ coins in 30 minutes.
 - Before that (2026-11-20): daily pack cap 3 → 5 and two new themes (Farm, Sweets), so there are 60 friends. Capped every day, the 50 pack friends take about 12 days (10–15), the same as the old 36 at 3 a day; a kid playing 2 rounds a day has coins for about 3 packs, so about 3 weeks. The 10 ultras need 50 mastered words. Pace math in `docs/friends-pacing.md`.
 - Before that (2026-11-20): time trials per table, the Final mission, and per-fact solve times (Jason's request after the first math build).
 - Earlier (2026-11-20): times tables game (× ÷ mixed, practice and speed modes, per-fact mastery). Checked at iPhone, iPad and desktop sizes in a headless browser.

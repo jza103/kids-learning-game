@@ -45,6 +45,21 @@ export const FACT_MASTERY_COINS = 15;
 export const FACT_MASTERY_XP = 25;
 export const FACTS_PER_SUPER_STEP = 2;
 
+// Warm-up facts: anything with 0, 1 or 2 (5 × 0, 7 × 1, 16 ÷ 2, 12 ÷ 6 = 2).
+// They're too easy to count as math facts (a tester ground the 0s for coins),
+// so they stay playable but pay no coins, top out at WARMUP_MAX_BOX stars,
+// never count as mastered, and give friends half XP. Mastery, Super Pack
+// credit and the times-table totals only count facts with both numbers 3-12.
+export const WARMUP_MAX = 2;
+export const WARMUP_MAX_BOX = 2;
+export function isWarmup(fact) {
+  return fact.op === 'mul' ? Math.min(fact.a, fact.b) <= WARMUP_MAX : Math.min(fact.b, fact.answer) <= WARMUP_MAX;
+}
+/** Facts that count toward mastery (both numbers 3-12). */
+export function trackedFacts(op) {
+  return allFacts(op).filter((f) => !isWarmup(f));
+}
+
 export function mathState(profile) {
   const m = profile.math || {};
   return {
@@ -128,7 +143,7 @@ export function maybeUnlock(state, op) {
 
 /** 0-5 stars per table, from the share of its facts mastered-ish (average box). */
 export function tableSummary(state, op, table) {
-  const facts = tableFacts(op, table);
+  const facts = tableFacts(op, table).filter((f) => !isWarmup(f));
   const boxes = facts.map((f) => state.srs[f.id]?.box || 0);
   const seen = facts.filter((f) => state.srs[f.id]?.seen).length;
   return {
@@ -157,7 +172,9 @@ export function trickyFacts(state, n = 6) {
  * Returns { profile, coins, xp, mastered, superStep, battleResult }.
  */
 export function recordFact(profile, factId, result, { mode = 'speed', now = Date.now(), powers = { xp: 0 }, ms = null } = {}) {
-  if (!factById(factId)) throw new Error(`unknown fact: ${factId}`);
+  const fact = factById(factId);
+  if (!fact) throw new Error(`unknown fact: ${factId}`);
+  const warmup = isWarmup(fact);
   const state = mathState(profile);
   const before = itemFor(state, factId, now);
   const due = before.seen === 0 || isDue(before, now);
@@ -170,6 +187,10 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
     // Asked again before it was due: no new star, small pay.
     after = { ...before, seen: before.seen + 1, correct: before.correct + 1, lastResult: 'correct' };
     coins = NOT_DUE_COINS;
+  } else if (srsResult === 'correct' && warmup && before.box >= WARMUP_MAX_BOX) {
+    // Warm-ups stop at WARMUP_MAX_BOX stars.
+    after = { ...before, seen: before.seen + 1, correct: before.correct + 1, lastResult: 'correct', dueAt: now + INTERVALS[before.box] };
+    coins = 0;
   } else if (srsResult === 'correct' && practice && before.box >= PRACTICE_MAX_BOX) {
     // Practice can't take a fact past PRACTICE_MAX_BOX stars: keep the box, reschedule.
     after = { ...before, seen: before.seen + 1, correct: before.correct + 1, lastResult: 'correct', dueAt: now + INTERVALS[before.box] };
@@ -178,10 +199,14 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
     after = review(before, srsResult, now);
     coins = coinsForAnswer(before, srsResult);
   }
+  if (warmup) {
+    coins = 0;
+    after = { ...after, box: Math.min(after.box, WARMUP_MAX_BOX), masteredAt: before.masteredAt ?? null };
+  }
   if (ms != null && (result === 'correct' || result === 'slow')) after = withSolveTime(after, ms);
   const mastered = before.masteredAt == null && after.masteredAt != null;
   let xp = XP_PER[srsResult];
-  if (practice) {
+  if (practice || warmup) {
     coins = Math.floor(coins * PRACTICE_REWARD);
     xp = Math.floor(xp * PRACTICE_REWARD);
   }
@@ -210,7 +235,7 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
     }
   }
   next.math = nextState;
-  return { profile: next, coins, xp, mastered, superStep, battleResult: srsResult };
+  return { profile: next, coins, xp, mastered, superStep, battleResult: srsResult, warmup };
 }
 
 // ---------- solve times ----------

@@ -191,3 +191,44 @@ test('trial records keep the personal best', () => {
   assert.deepEqual(mathState(r.profile).records['mul:7'], { best: 30000, last: 30000, runs: 3 });
   assert.equal(mathState(recordTrial(r.profile, FINAL_KEY, 90000).profile).records.final.best, 90000);
 });
+
+test('facts with 0, 1 or 2 are warm-ups: no coins, at most 2 stars, never mastered', async () => {
+  const { isWarmup, trackedFacts, WARMUP_MAX_BOX } = await import('../src/math.js');
+  assert.equal(trackedFacts('mul').length, 100);
+  assert.equal(trackedFacts('div').length, 100);
+  assert.ok(isWarmup(factById('m0x7')) && isWarmup(factById('m7x1')) && isWarmup(factById('m2x9')));
+  assert.ok(isWarmup(factById('d14/2')) && isWarmup(factById('d12/6')));
+  assert.ok(!isWarmup(factById('m3x3')) && !isWarmup(factById('d21/7')));
+
+  let p = kid();
+  let now = T0;
+  let coins = 0;
+  for (let i = 0; i < 40; i++) {
+    const r = recordFact(p, 'm0x5', 'correct', { mode: 'speed', now });
+    coins += r.coins;
+    assert.equal(r.mastered, false);
+    assert.equal(r.superStep, false);
+    p = r.profile;
+    now += DAY;
+  }
+  assert.equal(coins, 0);
+  assert.equal(p.coins, 0);
+  const item = mathState(p).srs['m0x5'];
+  assert.equal(item.box, WARMUP_MAX_BOX);
+  assert.equal(item.masteredAt, null);
+  assert.equal(mathState(p).mastered, 0);
+  assert.equal(tableSummary(mathState(p), 'mul', 0).total, 0, 'the 0s table has nothing to master');
+  assert.equal(tableSummary(mathState(p), 'mul', 5).total, 10, '5 × 3 … 5 × 12');
+});
+
+test('Smart mix still opens tables when the warm-ups reach their 2 stars', () => {
+  let p = kid();
+  let now = T0;
+  let s = mathState(p);
+  for (const f of poolFor(s, 'mul')) for (let k = 0; k < 2; k++) {
+    p = recordFact(p, f.id, 'correct', { mode: 'speed', now }).profile;
+    now += DAY;
+  }
+  const { table } = maybeUnlock(mathState(p), 'mul');
+  assert.notEqual(table, null);
+});
