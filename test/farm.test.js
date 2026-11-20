@@ -572,3 +572,12 @@ test('the market buys up to MARKET_BELLS a day; the rest stays in the barn', () 
   assert.equal(marketLeft(r.profile, T0 + DAY), MARKET_BELLS);
   assert.equal(sell(r.profile, 'carrot', 1, T0 + DAY).bells, value);
 });
+
+test('a friend added after planting still gives the element harvest bonus', () => {
+  const water = first5.find((i) => farmTrait(i.id).element === 'water').id;
+  let p = open(kid([water]));
+  p = plant(p, 0, 'strawberry', T0);
+  p = assignCrew(p, water, 'fields');
+  p = shine(p, 10);
+  assert.deepEqual(harvestAll(p, T0).harvested, [{ id: 'strawberry', n: 3 }]);
+});
