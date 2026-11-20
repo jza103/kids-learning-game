@@ -9,7 +9,7 @@ import {
   FARM_XP_PER_DAY, XP_PER_LEVEL, FORAGE_MAX_SUN, GOODY_MAX_CYCLES, FERTILIZER_SHARDS, BABY_PITY, START_BELLS, newFarm, journalProgress,
   pourSun, goldenSeason, MORNING_RAIN, GOLDEN_MAX, sendExpedition, collectExpedition, benchFriends, needsMet, expeditionSlots, welcomeExplorer,
   EXPEDITION_SUN, EXPEDITION_SHARDS, nextExpansion, expandCrew, pourTips, sunUseful, EXPAND_LEVEL, MAX_SLOTS,
-  isTired, stationPower, handOf, friendRank, allRounder, whereIs, ENERGY_MAX, MORNING_ENERGY, TRIP_ENERGY, RANKS,
+  isTired, stationPower, sunToNext, handOf, friendRank, allRounder, whereIs, ENERGY_MAX, MORNING_ENERGY, TRIP_ENERGY, RANKS,
 } from '../src/farm.js';
 import { newProfile } from '../src/profile.js';
 import { mulberry32 } from '../src/rng.js';
@@ -523,4 +523,16 @@ test('working every area makes an All-Rounder', () => {
     p.farm.hands[a].energy = ENERGY_MAX;
   }
   assert.equal(allRounder(p.farm, a), true);
+});
+
+test('pour just enough for the next thing to finish', () => {
+  let p = open(kid([]));
+  assert.equal(sunToNext(p), null);
+  p = plant(p, 0, 'carrot', T0);
+  p = plant(p, 1, 'strawberry', T0);
+  assert.deepEqual(sunToNext(p), { n: 3, kind: 'crop', id: 'carrot' });
+  p = pourSun({ ...p, sunJar: 50 }, sunToNext(p).n).profile;
+  assert.equal(p.sunJar, 47);
+  assert.equal(harvestAll(p, T0).harvested.length, 1);
+  assert.equal(sunToNext(p).id, 'strawberry');
 });
