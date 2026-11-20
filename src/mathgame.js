@@ -104,9 +104,9 @@ export function initMath(ctx) {
         <div class="card"><h3>Which tables?</h3>${tablePicker(state)}</div>
         <div class="mode-pick">
           <button class="big secondary" data-action="math-start" data-mode="practice">${MODES.practice.emoji} Practice
-            <div class="small muted">No timer · half coins · up to ${PRACTICE_MAX_BOX} ★</div></button>
+            <div class="small muted">No timer · half nuggets · up to ${PRACTICE_MAX_BOX} ★</div></button>
           <button class="big" data-action="math-start" data-mode="speed">${MODES.speed.emoji} Speed
-            <div class="small">${state.seconds} seconds each · full coins · master facts</div></button>
+            <div class="small">${state.seconds} seconds each · full nuggets · master facts</div></button>
         </div>
         ${trialCard(state)}
         <div class="card">${superProgressHtml(p)}
@@ -123,7 +123,7 @@ export function initMath(ctx) {
       return `<div class="topbar">
           <button class="secondary" data-action="math-end">Done</button>
           <span class="pill">${MODES[game.mode].emoji} ${Math.min(b.asked + (game.phase === 'ask' ? 1 : 0), ROUND_LENGTH)} of ${ROUND_LENGTH}</span>
-          <span class="pill">🪙 ${p.coins}</span>
+          <span class="pill">🟡 ${p.coins}</span>
         </div>
         ${arenaHtml('math', { hero: heroHtml(p, 'sm'), combo: b.combo, zap: game.zap, anim: game.anim, target: game.shownMonster, hp: game.shownHp, from: game.from })}
         <div class="card math-card">
@@ -160,21 +160,21 @@ export function initMath(ctx) {
       return `<h1>Round done! 🎉</h1>
         <div class="card">
           <div class="row" style="font-size:1.3rem;gap:24px">
-            <span>🪙 +${game.earned.coins}</span><span>⭐ +${game.earned.xp} XP</span>${game.earned.sun ? `<span>☀️ +${game.earned.sun}</span>` : ''}<span>${ACTIVITIES.math.count(game.battle.defeated)}</span>
+            <span>🟡 +${game.earned.coins}</span><span>⭐ +${game.earned.xp} XP</span>${game.earned.sun ? `<span>☀️ +${game.earned.sun}</span>` : ''}<span>${ACTIVITIES.math.count(game.battle.defeated)}</span>
           </div>
           <p>${game.right} of ${game.battle.asked} right${game.mode === 'speed' ? ` · ${game.fast} in time` : ''}.</p>
-          ${mastered.length ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((f) => `${esc(f.text)} = ${f.answer}`).join(', ')}!</strong> +${FACT_MASTERY_COINS * mastered.length} 🪙</p>` : ''}
+          ${mastered.length ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((f) => `${esc(f.text)} = ${f.answer}`).join(', ')}!</strong> +${FACT_MASTERY_COINS * mastered.length} 🟡</p>` : ''}
           ${game.unlocked.map((u) => `<p style="font-size:1.2rem">🔓 <strong>The ${u.table}s ${OPS[u.op].symbol} are open in Smart mix!</strong></p>`).join('')}
           ${superProgressHtml(p)}
           ${coinPaceNote(p, Date.now()) ? `<p class="small muted">${coinPaceNote(p, Date.now())}</p>` : ''}
           ${game.levelUp ? `<p style="font-size:1.3rem"><strong>Level up! You're level ${levelForXp(p.xp)}.</strong> Check the Locker for new stuff.</p>` : ''}
-          ${game.mode === 'practice' ? `<p class="small muted">Practice pays half coins. Try ⚡ Speed for full coins and to master facts.</p>` : ''}
+          ${game.mode === 'practice' ? `<p class="small muted">Practice pays half nuggets. Try ⚡ Speed for full nuggets and to master facts.</p>` : ''}
         </div>
         ${friendSummaryHtml(game.friendsBefore, p, game.friendEvents)}
         ${
           missed.length
             ? `<div class="card"><h3>Facts to keep practicing</h3><p style="font-size:1.4rem">${missed.map((f) => `${esc(f.text)} = ${f.answer}`).join(' · ')}</p>
-               <p class="small muted">These will come back more often, and pay extra coins when you get them right.</p></div>`
+               <p class="small muted">These will come back more often, and pay extra nuggets when you get them right.</p></div>`
             : ''
         }
         <div class="row">
@@ -219,7 +219,7 @@ export function initMath(ctx) {
               ? `<p style="text-align:center;font-size:1.2rem"><strong>${r.prevBest ? `${formatSeconds(r.prevBest - r.ms)} faster than your old best (${formatTime(r.prevBest)})!` : 'Your first time. Now try to beat it!'}</strong> +${TRIAL_RECORD_XP} XP</p>`
               : `<p style="text-align:center">Your best is <strong>${formatTime(r.prevBest)}</strong>. ${formatSeconds(r.ms - r.prevBest)} to go!</p>`
           }
-          <div class="row" style="justify-content:center;gap:24px"><span>🪙 +${t.earned.coins}</span><span>⭐ +${t.earned.xp + r.xp} XP</span>${t.earned.sun ? `<span>☀️ +${t.earned.sun}</span>` : ''}</div>
+          <div class="row" style="justify-content:center;gap:24px"><span>🟡 +${t.earned.coins}</span><span>⭐ +${t.earned.xp + r.xp} XP</span>${t.earned.sun ? `<span>☀️ +${t.earned.sun}</span>` : ''}</div>
         </div>
         ${friendSummaryHtml(t.friendsBefore, profile(), t.friendEvents)}
         ${
@@ -511,18 +511,19 @@ export function initMath(ctx) {
       game.feedback = defeated
         ? clearedText('math', defeated.monster)
         : result === 'slow'
-        ? `Right! ${f.text} = ${f.answer}. Faster next time for full coins.`
+        ? `Right! ${f.text} = ${f.answer}. Faster next time for full nuggets.`
         : game.mode === 'speed'
         ? `⚡ ${seconds.toFixed(1)}s!`
         : ['Nice!', 'Yes!', 'Great!', 'Zoom!'][Math.floor(Math.random() * 4)];
+      if (rec.shards && !defeated) game.feedback = `✨ Polished back to shiny! +${rec.shards} 💎`;
       if (rec.mastered) {
         game.mastered.push(f.id);
         game.earned.coins += FACT_MASTERY_COINS;
-        game.feedback = `🌟 You mastered ${f.text} = ${f.answer}! +${FACT_MASTERY_COINS} 🪙`;
+        game.feedback = `🌟 You mastered ${f.text} = ${f.answer}! +${FACT_MASTERY_COINS} 🟡`;
       }
       game.feedbackClass = 'good';
       render();
-      if (rec.coins) floatText(`+${rec.coins} 🪙`);
+      if (rec.coins) floatText(`+${rec.coins} 🟡`);
       advanceLater(rec.mastered ? 2000 : defeated ? 1200 : result === 'slow' ? 1500 : 650);
     } else {
       game.missed.add(f.id);
@@ -611,7 +612,7 @@ export function initMath(ctx) {
       <p class="small muted">Facts 0–12, each with its own 0–${MAX_BOX} star rating like spelling words. Smart mix starts with the easy tables
         (${UNLOCK_ORDER.mul.slice(0, 5).join(', ')}) and opens the next one when most open facts have 2 stars; kids can also pick any single table.
         Practice has no timer, pays half and stops at ${PRACTICE_MAX_BOX} stars. Speed mode pays full, and a right answer only adds a star when it's in time,
-        so mastered means fast recall. Facts with a 0, 1 or 2 in them (like 5 × 0 or 14 ÷ 2) are warm-ups: they pay no coins, stop at ${WARMUP_MAX_BOX} stars and don't count toward mastery, so the ${trackedFacts('mul').length + trackedFacts('div').length} facts that count use only 3–12. Each mastered fact pays ${FACT_MASTERY_COINS} coins once, and every ${FACTS_PER_SUPER_STEP} mastered facts fill one Super Pack dot.</p>
+        so mastered means fast recall. Facts with a 0, 1 or 2 in them (like 5 × 0 or 14 ÷ 2) are warm-ups: they pay no nuggets, stop at ${WARMUP_MAX_BOX} stars and don't count toward mastery, so the ${trackedFacts('mul').length + trackedFacts('div').length} facts that count use only 3–12. Each mastered fact pays ${FACT_MASTERY_COINS} nuggets once, and every ${FACTS_PER_SUPER_STEP} mastered facts fill one Super Pack dot.</p>
     </div>`;
   }
 

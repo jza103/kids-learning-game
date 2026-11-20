@@ -62,9 +62,9 @@ export function earnCoins(profile, base, now) {
 /** A friendly line for results screens once coins slow down today, else ''. */
 export function coinPaceNote(profile, now) {
   const pace = coinPace(profile, now);
-  if (pace.full) return `🪙 Your coin bag is full for today (${DAILY_COIN_MAX} coins). XP and friend XP still count. More coins tomorrow!`;
-  if (pace.rate === 0) return '🪙 Lots of coins today! Answers pay 1 coin for the rest of the day. Full coins again tomorrow.';
-  if (pace.rate < 1) return '🪙 Lots of coins today! Answers pay half for the rest of the day. Full coins again tomorrow.';
+  if (pace.full) return `🟡 Your nugget bag is full for today (${DAILY_COIN_MAX} nuggets). XP and friend XP still count. More nuggets tomorrow!`;
+  if (pace.rate === 0) return '🟡 Lots of nuggets today! Answers pay 1 nugget for the rest of the day. Full nuggets again tomorrow.';
+  if (pace.rate < 1) return '🟡 Lots of nuggets today! Answers pay half for the rest of the day. Full nuggets again tomorrow.';
   return '';
 }
 

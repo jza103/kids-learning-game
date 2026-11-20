@@ -17,7 +17,7 @@ export const MISS_BOOST_CAP = 4;
 
 // --- Mastery refresh ---
 // A mastered item (top box) comes back after a while and needs a "refresh":
-// until it's answered right again it shows 4 stars and a 🔄. Each refresh
+// until it's answered right again it shows 4 stars and a 🧽 ("needs a polish" in the mining theme). Each refresh
 // pushes the next one further out. Items that were once a problem (missed
 // PROBLEM_MISSES+ times) come back twice as soon.
 export const REFRESH_DAYS = [7, 14, 30, 60];
@@ -111,7 +111,7 @@ export function pickNext(items, now, rng = Math.random, recent = []) {
 
 /** 0-5 star mastery rating (the current box) and a label for it. */
 export function masteryRating(item, now = Date.now()) {
-  if (needsRefresh(item, now)) return { stars: MAX_BOX - 1, label: 'Needs a refresh', refresh: true };
+  if (needsRefresh(item, now)) return { stars: MAX_BOX - 1, label: 'Needs a polish', refresh: true };
   const stars = item ? item.box : 0;
   let label = 'New';
   if (item && item.seen > 0) label = stars >= MAX_BOX ? 'Mastered' : stars >= 3 ? 'Strong' : 'Learning';

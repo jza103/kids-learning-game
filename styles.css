@@ -436,3 +436,7 @@ button.plot, .critter { position: relative; }
 .wl-load textarea { width: 100%; min-width: 0; font-size: 16px; box-sizing: border-box; }
 .wl-load input[type=text] { font-size: 16px; }
 .wl-preview { margin-top: 10px; padding: 10px; border: 2px dashed var(--line); border-radius: 12px; }
+/* Grown-ups: give resources */
+.grant-list { display: grid; gap: 4px; }
+.grant-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.grant-row .row { gap: 6px; }

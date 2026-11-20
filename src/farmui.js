@@ -47,7 +47,7 @@ export function initFarm(ctx) {
   const FRIENDLY = {
     'not enough bells': 'Not enough Grove Bells yet. Fill requests or sell goods to earn more.',
     'the market is full today': 'The market has bought all it can today. Requests still pay, and the market opens again tomorrow!',
-    'not enough shards': 'Not enough 💎 shards.',
+    'not enough shards': 'Not enough 💎 gem dust.',
     'no pen space': 'Your pens are full. Build another pen first.',
     'crew full': 'That crew is full. Take someone off first, or level up your farm for more spots.',
     'put this friend on a crew first': 'Put this friend on a crew to use its perk.',
@@ -185,7 +185,7 @@ export function initFarm(ctx) {
         </div><button class="ghost" data-action="farm-plot" data-i="-1">Cancel</button></div>`;
       } else if (!plotReady(pl)) {
         picker = `<div class="picker"><p>${g(pl.crop).emoji} ${g(pl.crop).name} needs ${sunLeft(pl, speed)} more ☀️ Sunshine at your crew's speed now.</p>
-          <div class="row"><button class="secondary" data-action="farm-fertilize" ${p.shards >= FERTILIZER_SHARDS ? '' : 'disabled'}>💎 Crystal fertilizer: ready now (${FERTILIZER_SHARDS} shards)</button>
+          <div class="row"><button class="secondary" data-action="farm-fertilize" ${p.shards >= FERTILIZER_SHARDS ? '' : 'disabled'}>💎 Crystal fertilizer: ready now (${FERTILIZER_SHARDS} gem dust)</button>
           <button class="ghost" data-action="farm-plot" data-i="-1">Close</button></div></div>`;
       }
     }
@@ -379,7 +379,7 @@ export function initFarm(ctx) {
         return `<div class="decor ${own ? 'owned' : ''}"><div class="big-emoji">${d.emoji}</div><div class="small">${esc(d.name)}</div>
           ${own ? '<div class="small">✓ On your farm</div>' : `<button class="small-btn" data-action="farm-decor" data-id="${d.id}" ${can ? '' : 'disabled'}>${d.shards ? `💎 ${cost}` : `🔔 ${cost}`}</button>`}</div>`;
       }).join('')}</div>
-      <p class="small muted">Crystal decorations cost 💎 shards from duplicate friends. Journal prizes can't be bought: finish a Journal page to get them.</p></div>`;
+      <p class="small muted">Crystal decorations cost 💎 gem dust from duplicate friends. Journal prizes can't be bought: finish a Journal page to get them.</p></div>`;
   }
 
   // ---------- Sunshine ----------
@@ -701,8 +701,8 @@ export function initFarm(ctx) {
     if (!kid) return '';
     return `<div class="card">
       <h3>🌻 Friend Grove</h3>
-      <p class="small muted">A farm side game where friends work, crops grow, critters move in and friends go on expeditions. <strong>Learning powers it:</strong> every correct answer in any game puts ☀️ Sunshine in the Sun Jar (2 for a word that was missed last time, +10 for mastering one; warm-up facts give none), and Sunshine is what grows everything, not the clock. So there's no reason to check in at set times, and nothing is lost while away. There's ${MORNING_RAIN} free Sunshine each morning. When a kid has mastered everything and nothing needs a refresh, the farm grows on its own (Golden Season).
-        The farm pays its own Grove Bells and never coins, packs or friends. Mastering gives Wonder Seeds; finishing sets gives Mystery Eggs. Farm XP comes mostly from pouring Sunshine (1 XP each), so farm progress follows learning, and it's capped at ${FARM_XP_PER_DAY} a day. Farm level gates bigger crew areas, new lands and more expedition teams, and each land's routes hold their own treasures, so collecting everything takes weeks, not a weekend. Learning itself is never capped. Each friend also has ⚡ energy and farm know-how: working uses energy and earns know-how, resting friends recover from the same Sunshine (plus a little each morning), so kids rotate friends instead of leaving one crew in place. A tired friend still works at half power; nothing is lost.</p>
+      <p class="small muted">A farm side game where friends work, crops grow, critters move in and friends go on expeditions. <strong>Learning powers it:</strong> every correct answer in any game puts ☀️ Sunshine in the Sun Jar (2 for a word that was missed last time, +10 for mastering one; warm-up facts give none), and Sunshine is what grows everything, not the clock. So there's no reason to check in at set times, and nothing is lost while away. There's ${MORNING_RAIN} free Sunshine each morning. When a kid has mastered everything and nothing needs polishing, the farm grows on its own (Golden Season).
+        The farm pays its own Grove Bells and never nuggets, packs or friends. Mastering gives Wonder Seeds; finishing sets gives Mystery Eggs. Farm XP comes mostly from pouring Sunshine (1 XP each), so farm progress follows learning, and it's capped at ${FARM_XP_PER_DAY} a day. Farm level gates bigger crew areas, new lands and more expedition teams, and each land's routes hold their own treasures, so collecting everything takes weeks, not a weekend. Learning itself is never capped. Each friend also has ⚡ energy and farm know-how: working uses energy and earns know-how, resting friends recover from the same Sunshine (plus a little each morning), so kids rotate friends instead of leaving one crew in place. A tired friend still works at half power; nothing is lost.</p>
       <div class="row" style="flex-wrap:wrap;margin:8px 0"><span>☀️ Sun Jar: <strong>${sunJar(kid)}</strong></span>
         ${PARENT_SUN.map((n) => `<button class="small-btn secondary" data-action="farm-parent-sun" data-n="${n}">+${n} ☀️</button>`).join('')}
         <span class="small muted">For testing and balancing. It goes straight into ${esc(kid.name)}'s jar and doesn't count as learning.</span></div>

@@ -76,7 +76,7 @@ test('mastery rating follows the box', () => {
   const m = masterWord(p, 'cat', p.srs.cat.dueAt);
   p = m.profile;
   assert.equal(masteryRating(p.srs.cat, m.now - 1).label, 'Mastered');
-  assert.deepEqual(masteryRating(p.srs.cat, m.now), { stars: MAX_BOX - 1, label: 'Needs a refresh', refresh: true });
+  assert.deepEqual(masteryRating(p.srs.cat, m.now), { stars: MAX_BOX - 1, label: 'Needs a polish', refresh: true });
 });
 
 test('mastering a word pays coins, XP and Super Pack progress exactly once', () => {
