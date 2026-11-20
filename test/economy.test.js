@@ -223,3 +223,19 @@ test('hint shows the first letters only', () => {
   assert.equal(hintText('because'), 'b e c _ _ _ _');
   assert.equal(hintText("don't", 1), "d _ _ ' _");
 });
+
+test('every theme has the same shape: 6 common, 3 rare, 1 epic, 2 ultra, 4 friends per game type', () => {
+  const ids = new Set();
+  const emoji = new Set();
+  for (const t of THEMES) {
+    const count = (key) => t.items.reduce((a, i) => ({ ...a, [i[key]]: (a[i[key]] || 0) + 1 }), {});
+    assert.deepEqual(count('rarity'), { common: 6, rare: 3, epic: 1, ultra: 2 }, t.id);
+    assert.deepEqual(count('specialty'), { spelling: 4, math: 4, vocab: 4 }, t.id);
+    for (const i of t.items) {
+      assert.ok(!ids.has(i.id), `duplicate id ${i.id}`);
+      assert.ok(!emoji.has(i.emoji), `duplicate emoji ${i.emoji}`);
+      ids.add(i.id);
+      emoji.add(i.emoji);
+    }
+  }
+});
