@@ -345,3 +345,4 @@ button.sun-btn { background: linear-gradient(135deg, #f59e0b, #f97316); color: #
 .story p { font-size: 1.1rem; }
 .wish-card { border-color: #a78bfa; background: linear-gradient(135deg, #f5f0ff, #eef6ff); }
 .collectible .trait { margin-top: 4px; }
+.card > .route + .route { border-top: 1px solid var(--line, #e5e7f0); margin-top: 10px; padding-top: 10px; }
