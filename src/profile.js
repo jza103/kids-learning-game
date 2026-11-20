@@ -1,6 +1,6 @@
 // Per-kid profile: their word list, spaced-repetition state, wallet,
 // collection and cosmetics.
-import { newItem, review, isDue, pickNext } from './srs.js';
+import { MAX_BOX, newItem, review, isDue, pickNext } from './srs.js';
 import { coinsForAnswer, earnCoins, newPackState, rewardMastery } from './economy.js';
 import { claimLegends } from './legend.js';
 import { XP_PER, applyXpBoost } from './progress.js';
@@ -226,5 +226,7 @@ export function recordAnswer(profile, wordId, result, now, powers = { xp: 0 }) {
   }
   let sun, shards;
   ({ profile: next, sun, shards } = learnRewards(next, before, result, now, { mastered }));
-  return { profile: next, coins, xp, mastered, legends, weekStar, sun, shards };
+  // Right, but the word already earned its star today (STAR_RULES.dailyFrom).
+  const starWaits = result === 'correct' && after.box === before.box && before.box < MAX_BOX;
+  return { profile: next, coins, xp, mastered, starWaits, legends, weekStar, sun, shards };
 }

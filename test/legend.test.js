@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+
+// Answers a day apart: from 2 stars up a word earns one star a day.
+const DAY_STEP = 24 * 3600e3;
 import { newProfile, addWords, parseWordList, recordAnswer } from '../src/profile.js';
 import { recordFact } from '../src/math.js';
 import { recordMatch, vocabOf } from '../src/vocab.js';
@@ -18,7 +21,7 @@ test('mastering every × and ÷ fact of a table (3-12) earns its Table Titan, on
   let now = T0;
   for (const id of ids) {
     for (let k = 0; k < MAX_BOX; k++) {
-      const r = recordFact(p, id, 'correct', { mode: 'speed', now: (now += 1000) });
+      const r = recordFact(p, id, 'correct', { mode: 'speed', now: (now += DAY_STEP) });
       p = r.profile;
       got = got.concat(r.legends);
     }
@@ -41,7 +44,7 @@ test('a fully mastered week list earns a Week Star; every 4 Week Stars earn a sp
     p = addWords(p, parseWordList(words.join('\n')), now).profile;
     for (const id of words) {
       for (let k = 0; k < MAX_BOX; k++) {
-        const r = recordAnswer(p, id, 'correct', (now += 1000));
+        const r = recordAnswer(p, id, 'correct', (now += DAY_STEP));
         p = r.profile;
         if (r.weekStar) stars++;
         legends.push(...r.legends);
@@ -58,13 +61,13 @@ test('finishing last week\'s list after a new list arrives still earns its Week 
   let now = T0;
   const old = ['ant', 'bee', 'cow', 'dog', 'eel'];
   p = addWords(p, parseWordList(old.join('\n')), now).profile;
-  for (const id of old.slice(0, 4)) for (let k = 0; k < MAX_BOX; k++) p = recordAnswer(p, id, 'correct', (now += 1000)).profile;
+  for (const id of old.slice(0, 4)) for (let k = 0; k < MAX_BOX; k++) p = recordAnswer(p, id, 'correct', (now += DAY_STEP)).profile;
   now = T0 + WEEK;
   p = addWords(p, parseWordList('fox\ngnu\nhen\nibis\njay'), now).profile;
   assert.equal((p.weekStars || []).length, 0);
   let star = false;
   for (let k = 0; k < MAX_BOX; k++) {
-    const r = recordAnswer(p, 'eel', 'correct', (now += 1000));
+    const r = recordAnswer(p, 'eel', 'correct', (now += DAY_STEP));
     p = r.profile;
     star ||= r.weekStar;
   }
@@ -75,7 +78,7 @@ test('finishing last week\'s list after a new list arrives still earns its Week 
 test('a short list (fewer than the minimum words) earns no Week Star', () => {
   let p = addWords(newProfile('A', T0), parseWordList('cat\ndog'), T0).profile;
   let now = T0;
-  for (const id of ['cat', 'dog']) for (let k = 0; k < MAX_BOX; k++) p = recordAnswer(p, id, 'correct', (now += 1000)).profile;
+  for (const id of ['cat', 'dog']) for (let k = 0; k < MAX_BOX; k++) p = recordAnswer(p, id, 'correct', (now += DAY_STEP)).profile;
   assert.equal((p.weekStars || []).length, 0);
 });
 
@@ -86,7 +89,7 @@ test('every 25 mastered Word Match words earn a vocab Legendary', () => {
   const legends = [];
   for (const id of ids) {
     for (let k = 0; k < MAX_BOX; k++) {
-      const r = recordMatch(p, id, 'correct', (now += 1000));
+      const r = recordMatch(p, id, 'correct', (now += DAY_STEP));
       p = r.profile;
       legends.push(...r.legends);
     }

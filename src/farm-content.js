@@ -66,14 +66,16 @@ export function farmTrait(id) {
 }
 
 // ---------- Biomes ----------
+// from: the day a land arrives (with that month's friend theme), so the Grove
+// grows over the school year however fast a kid plays (Jason, 2026-11-20).
 // level: farm level needed. cost: Grove Bells. elements: a friend of one of
 // these elements must be on the build crew to open it.
 export const BIOMES = [
   { id: 'meadow', name: 'Sunny Meadow', emoji: '🌼', level: 1, cost: 0, elements: [] },
-  { id: 'frost', name: 'Frost Ridge', emoji: '🏔️', level: 3, cost: 120, elements: ['frost', 'wind'] },
-  { id: 'tide', name: 'Tide Pools', emoji: '🌊', level: 6, cost: 300, elements: ['water', 'sun'] },
-  { id: 'caves', name: 'Glow Caves', emoji: '🕯️', level: 10, cost: 600, elements: ['glow', 'earth'] },
-  { id: 'cloud', name: 'Cloud Garden', emoji: '☁️', level: 15, cost: 1000, elements: ['wind', 'sun'] },
+  { id: 'frost', name: 'Frost Ridge', emoji: '🏔️', level: 3, cost: 120, elements: ['frost', 'wind'], from: '2027-01-04' },
+  { id: 'tide', name: 'Tide Pools', emoji: '🌊', level: 6, cost: 300, elements: ['water', 'sun'], from: '2027-03-01' },
+  { id: 'caves', name: 'Glow Caves', emoji: '🕯️', level: 10, cost: 600, elements: ['glow', 'earth'], from: '2027-04-05' },
+  { id: 'cloud', name: 'Cloud Garden', emoji: '☁️', level: 15, cost: 1000, elements: ['wind', 'sun'], from: '2027-05-03' },
 ];
 export const BIOMES_BY_ID = Object.fromEntries(BIOMES.map((b) => [b.id, b]));
 

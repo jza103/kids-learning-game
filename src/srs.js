@@ -39,7 +39,7 @@ export function needsRefresh(item, now = Date.now()) {
 //   a day (null = no limit). Rewards spaced practice over one-day cramming.
 //   Math opts out (review(..., { daily: false })): Jason, no cap on facts.
 // missDrop: stars lost on a miss (MAX_BOX = back to 0, the classic Leitner rule).
-export const STAR_RULES = { dailyFrom: null, missDrop: MAX_BOX };
+export const STAR_RULES = { dailyFrom: 2, missDrop: 2 };
 
 export function newItem(id, now) {
   return { id, box: 0, dueAt: now, seen: 0, correct: 0, misses: 0, lastResult: null, masteredAt: null };
@@ -56,7 +56,10 @@ export function review(item, result, now, { daily = true } = {}) {
   if (result === 'correct' && waitForTomorrow) {
     // Already earned a star today: right answers still count, the star waits.
     next.correct = item.correct + 1;
-    next.dueAt = Math.max(item.dueAt, now + INTERVALS[0]);
+    // Not due again until tomorrow, so the rest of today's play goes to other words.
+    const tomorrow = new Date(now);
+    tomorrow.setHours(24, 0, 0, 0);
+    next.dueAt = Math.max(item.dueAt, tomorrow.getTime());
     return next;
   }
   if (result === 'correct') {

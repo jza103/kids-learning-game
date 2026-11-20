@@ -6,7 +6,7 @@ import {
   visitFarm, assignCrew, removeCrew, slotsFor, workPower, stationSpeed, plant, harvestAll, collectGoodies, befriend, befriendCost,
   collectForage, forageWaiting, startCraft, collectCraft, fillRequest, sell, buyPlot, buyPen, plotCost, openBiome, biomeBlock,
   buyDecor, usePerk, perkUsesLeft, hatchEgg, fertilize, sendGift, canGift, farmLocked, farmLevel, xpLeftToday,
-  FARM_XP_PER_DAY, XP_PER_LEVEL, FORAGE_MAX_SUN, GOODY_MAX_CYCLES, FERTILIZER_SHARDS, BABY_PITY, START_BELLS, newFarm, journalProgress,
+  FARM_XP_PER_DAY, XP_PER_LEVEL, farmXpForLevel, MARKET_BELLS, marketLeft, FORAGE_MAX_SUN, GOODY_MAX_CYCLES, FERTILIZER_SHARDS, BABY_PITY, START_BELLS, newFarm, journalProgress,
   pourSun, goldenSeason, MORNING_RAIN, GOLDEN_MAX, sendExpedition, collectExpedition, benchFriends, needsMet, expeditionSlots, welcomeExplorer,
   EXPEDITION_SUN, EXPEDITION_SHARDS, nextExpansion, expandCrew, pourTips, sunUseful, EXPAND_LEVEL, MAX_SLOTS,
   isTired, stationPower, sunToNext, craftProfit, handOf, friendRank, allRounder, whereIs, ENERGY_MAX, MORNING_ENERGY, TRIP_ENERGY, RANKS,
@@ -197,6 +197,14 @@ test('requests pay bells (more when the friend who asked is on a crew)', () => {
   assert.ok(visitFarm(r.profile, T0 + HOUR, mulberry32(2)).profile.farm.requests[0]);
 });
 
+test('each farm level costs a bit more than the last', () => {
+  assert.equal(farmXpForLevel(1), 0);
+  assert.equal(farmXpForLevel(2), XP_PER_LEVEL);
+  assert.equal(farmXpForLevel(15), 4375);
+  assert.equal(farmLevel({ xp: farmXpForLevel(15) - 1 }), 14);
+  assert.equal(farmLevel({ xp: farmXpForLevel(15) }), 15);
+});
+
 test('farm XP is capped per day, so levels take days', () => {
   let p = open(kid([]));
   p = { ...p, sunJar: 500 };
@@ -214,14 +222,17 @@ test('building: plots and pens cost bells; biomes need a level, an element on th
   p = buyPlot(p);
   assert.equal(p.farm.plots.length, 5);
   assert.equal(p.farm.bells, 1000 - cost);
-  assert.equal(biomeBlock(p, 'frost'), 'level');
-  p.farm = { ...p.farm, xp: XP_PER_LEVEL * 2 };
-  assert.equal(biomeBlock(p, 'frost'), 'element');
+  assert.equal(biomeBlock(p, 'frost', T0), 'date', 'Frost Ridge arrives in January');
+  const JAN = new Date(2027, 0, 4, 9).getTime();
+  assert.equal(biomeBlock(p, 'frost', JAN), 'level');
+  p.farm = { ...p.farm, xp: farmXpForLevel(3) };
+  assert.equal(biomeBlock(p, 'frost', JAN), 'element');
   const frosty = findFriend((t) => t.element === 'frost' && t.job === 'builder');
   p = { ...p, collection: { [frosty]: 1 } };
   p = assignCrew(p, frosty, 'build');
-  assert.equal(biomeBlock(p, 'frost'), null);
-  p = openBiome(p, 'frost', T0);
+  assert.equal(biomeBlock(p, 'frost', JAN), null);
+  assert.throws(() => openBiome(p, 'frost', T0), /date/);
+  p = openBiome(p, 'frost', JAN);
   assert.ok(p.farm.biomes.includes('frost'));
   assert.ok(p.farm.bells < 1000 - cost - 100, 'bells spent (with builder discount)');
 });
@@ -547,6 +558,19 @@ test('the workshop earns Bells: crafts are worth more than their materials and c
   assert.equal(r.bells, 40);
   assert.equal(r.profile.farm.bells, bells + 40);
   assert.equal(r.profile.farm.items.bread || 0, 0);
+});
+
+test('the market buys up to MARKET_BELLS a day; the rest stays in the barn', () => {
+  let p = open(kid([]));
+  p.farm = { ...p.farm, items: { carrot: 500 } };
+  const value = GOODS_BY_ID.carrot.value;
+  const r = sell(p, 'carrot', 500, T0);
+  assert.equal(r.n, Math.ceil(MARKET_BELLS / value));
+  assert.equal(r.profile.farm.items.carrot, 500 - r.n);
+  assert.equal(marketLeft(r.profile, T0), 0);
+  assert.throws(() => sell(r.profile, 'carrot', 1, T0), /market is full/);
+  assert.equal(marketLeft(r.profile, T0 + DAY), MARKET_BELLS);
+  assert.equal(sell(r.profile, 'carrot', 1, T0 + DAY).bells, value);
 });
 
 test('a friend added after planting still gives the element harvest bonus', () => {

@@ -10,7 +10,7 @@ import {
   ownedCritters, penSpace, goodyCycles, collectGoodies, befriendCost, befriend, waveBye, hatchEgg, forageWaiting, collectForage,
   startCraft, canCraft, collectCraft, craftProfit, fillRequest, skipRequest, requestPay, sell, plotCost, nextPenCost, buyPlot, buyPen,
   biomeBlock, biomeCost, openBiome, decorCost, buyDecor, journalProgress, perkUsesLeft, usePerk, canGift, sendGift, farmLocked,
-  FERTILIZER_SHARDS, GIFT_MAX, FARM_XP_PER_DAY, sunLeft, sunJar, pourSun, sunToFinish, sunUseful, sunToNext, goldenSeason, MORNING_RAIN, GOODY_SUN,
+  FERTILIZER_SHARDS, GIFT_MAX, marketLeft, MARKET_BELLS, FARM_XP_PER_DAY, sunLeft, sunJar, pourSun, sunToFinish, sunUseful, sunToNext, goldenSeason, MORNING_RAIN, GOODY_SUN,
   FORAGE_PER_POWER_SUN, expeditionSlots, biomeOpen, benchFriends, needsMet, fitsNeed, sendExpedition, collectExpedition, welcomeExplorer,
   EXPEDITION_SUN, TEAM_SIZE_FOR, EXPEDITION_SHARDS, NEED_SPEED, handOf, friendRank, jobStamps, allRounder, isTired, whereIs, RANKS, ENERGY_MAX,
   ENERGY_REST, MORNING_ENERGY, TRIP_ENERGY, JOB_STAMP_SUN, expeditionSpeed, nextExpansion, expandCrew, pourTips, routeExplorer, MAX_SLOTS,
@@ -46,6 +46,7 @@ export function initFarm(ctx) {
 
   const FRIENDLY = {
     'not enough bells': 'Not enough Grove Bells yet. Fill requests or sell goods to earn more.',
+    'the market is full today': 'The market has bought all it can today. Requests still pay, and the market opens again tomorrow!',
     'not enough shards': 'Not enough 💎 shards.',
     'no pen space': 'Your pens are full. Build another pen first.',
     'crew full': 'That crew is full. Take someone off first, or level up your farm for more spots.',
@@ -345,7 +346,7 @@ export function initFarm(ctx) {
         ${items.length ? `<table>${items.map(([id, n]) => `<tr><td>${g(id).emoji} ${esc(g(id).name)}</td><td>${n}</td><td class="small muted">🔔${g(id).value} each</td>
           <td class="nowrap"><button class="small-btn secondary" data-action="farm-sell" data-id="${id}" data-n="1">Sell 1</button>${n > 1 ? `<button class="small-btn secondary" data-action="farm-sell" data-id="${id}" data-n="${n}">Sell all</button>` : ''}</td></tr>`).join('')}</table>`
           : '<p class="muted">Empty. Harvest, collect and forage to fill it.</p>'}
-        <p class="small muted">Requests pay more than selling.</p></div>
+        <p class="small muted">Requests pay more than selling. The market buys 🔔 ${marketLeft(p)} more today (up to ${MARKET_BELLS} a day).</p></div>
       ${kids.length && items.length ? `<div class="card"><h3>🎁 Send a gift</h3><p class="small muted">Send up to ${GIFT_MAX} of something to a brother or sister on this iPad, once a day each. They get a little bonus too.</p>
         <div class="row"><select data-action-change="farm-gift-item" aria-label="Gift">${items.map(([id, n]) => `<option value="${id}" ${id === giftItem ? 'selected' : ''}>${g(id).emoji} ${esc(g(id).name)} (${n})</option>`).join('')}</select>
         ${kids.map((k) => `<button class="secondary" data-action="farm-gift" data-id="${k.id}" ${canGift(p, k.id, now) ? '' : 'disabled'}>To ${esc(k.name)}${canGift(p, k.id, now) ? '' : ' ✓'}</button>`).join('')}</div></div>` : ''}`;
@@ -357,7 +358,7 @@ export function initFarm(ctx) {
     const pc = plotCost(p);
     const pen = nextPenCost(p);
     const disc = buildDiscount(p);
-    const blockText = { level: (b) => `Farm level ${b.level}`, element: (b) => `Needs a ${b.elements.map((e) => ELEMENTS[e].emoji + ' ' + ELEMENTS[e].name).join(' or ')} friend on the Build crew`, bells: (b) => `🔔 ${biomeCost(p, b.id)}` };
+    const blockText = { date: (b) => `Arrives ${new Date(`${b.from}T12:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}, then farm level ${b.level}`, level: (b) => `Farm level ${b.level}`, element: (b) => `Needs a ${b.elements.map((e) => ELEMENTS[e].emoji + ' ' + ELEMENTS[e].name).join(' or ')} friend on the Build crew`, bells: (b) => `🔔 ${biomeCost(p, b.id)}` };
     return `${disc ? `<div class="card small">🪚 Your builders take <strong>${Math.round(disc * 100)}%</strong> off.${f.halfOff ? ' (Barn Raising: next build is half price!)' : ''}</div>` : ''}
       <div class="card"><h3>Grow your farm</h3><div class="row">
         <button data-action="farm-buy-plot" ${pc != null && f.bells >= pc ? '' : 'disabled'}>➕ Field plot ${pc != null ? `🔔 ${pc}` : '(all built)'}</button>
@@ -608,6 +609,7 @@ export function initFarm(ctx) {
     'farm-craft-done': (d) => {
       const r = act((p, now) => collectCraft(p, now, { sellNow: Boolean(d.sell) }));
       if (r?.bells) floatText(`${g(r.id).emoji} Sold! 🔔 +${r.bells}`);
+      else if (r?.id && d.sell) floatText(`${g(r.id).emoji} The market is full today, so it's on your shelf.`, 2500);
       else if (r?.id) floatText(`${g(r.id).emoji} ${g(r.id).name}!`);
     },
     'farm-pick': (d) => {
@@ -648,8 +650,8 @@ export function initFarm(ctx) {
     },
     'farm-skip': (d) => act((p, now) => skipRequest(p, num(d.i), now)),
     'farm-sell': (d) => {
-      const r = act((p) => sell(p, d.id, num(d.n)));
-      if (r?.bells) floatText(`🔔 +${r.bells}`);
+      const r = act((p, now) => sell(p, d.id, num(d.n), now));
+      if (r?.bells) floatText(`🔔 +${r.bells}${r.n < num(d.n) ? ' (the market is full for today)' : ''}`);
     },
     'farm-gift': (d) => {
       const other = data().profiles[d.id];

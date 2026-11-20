@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+
+// Answers a day apart: from 2 stars up a word earns one star a day.
+const DAY_STEP = 24 * 3600e3;
 import { newProfile, parseWordList, addWords, currentWords, activeItems, recordAnswer, pickPracticeWord, migrateProfile, removeWord, entryWarnings, cleanEntries, MAX_REVIEW_PER_ROUND } from '../src/profile.js';
 import { review, MAX_BOX, masteryRating, INTERVALS } from '../src/srs.js';
 import { rewardMastery, openSuperPack, craft, MASTERY_COINS, SUPER_PACK_EVERY, SUPER_PACK_SHARDS, openPack, PACK_COST } from '../src/economy.js';
@@ -235,7 +238,7 @@ test('a mastered word that is deleted and added again does not pay its mastery t
   const master = () => {
     let paid = 0;
     for (let k = 0; k < MAX_BOX; k++) {
-      const r = recordAnswer(p, 'cat', 'correct', (now += 1000));
+      const r = recordAnswer(p, 'cat', 'correct', (now += DAY_STEP));
       p = r.profile;
       if (r.mastered) paid++;
     }

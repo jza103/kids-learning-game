@@ -70,7 +70,8 @@ export const GIFT_MAX = 5;
 export const GIFT_THANKS = 10; // bells the receiver gets with a gift
 // Farm level is paced by days, not hours: farm XP per day is capped.
 export const FARM_XP_PER_DAY = 100;
-export const XP_PER_LEVEL = 150;
+export const XP_PER_LEVEL = 150; // XP from level 1 to 2...
+export const XP_LEVEL_STEP = 25; // ...and each level after costs this much more (level 15: 4,375 XP)
 // Farm XP comes from Sunshine poured (so from learning), plus one-off firsts
 // (a new critter, a Wonder crop from mastering). Harvests, goodies, forage,
 // crafts and requests give none: one Sunshine grows every plot at once, so
@@ -179,11 +180,20 @@ const withFarm = (profile, farm) => ({ ...profile, farm });
 const clone = (f) => JSON.parse(JSON.stringify(f));
 
 // ---------- Levels ----------
+/** Total farm XP to reach `level`. Each level costs XP_LEVEL_STEP more than the last. */
+export function farmXpForLevel(level) {
+  const n = Math.max(0, level - 1);
+  return XP_PER_LEVEL * n + (XP_LEVEL_STEP * n * (n - 1)) / 2;
+}
 export function farmLevel(farm) {
-  return 1 + Math.floor(farm.xp / XP_PER_LEVEL);
+  let level = 1;
+  while (farm.xp >= farmXpForLevel(level + 1)) level++;
+  return level;
 }
 export function farmLevelProgress(farm) {
-  return { level: farmLevel(farm), into: farm.xp % XP_PER_LEVEL, needed: XP_PER_LEVEL };
+  const level = farmLevel(farm);
+  const start = farmXpForLevel(level);
+  return { level, into: farm.xp - start, needed: farmXpForLevel(level + 1) - start };
 }
 export function xpLeftToday(farm, now) {
   return farm.xpDay.day === dayKey(now) ? Math.max(0, FARM_XP_PER_DAY - farm.xpDay.got) : FARM_XP_PER_DAY;
@@ -576,8 +586,9 @@ export function collectCraft(profile, now, { sellNow = false } = {}) {
   const events = [];
   gainXp(f, FARM_XP.craft, now, events);
   let bells = 0;
-  if (sellNow) {
+  if (sellNow && marketLeft(withFarm(profile, f), now) > 0) {
     takeItems(f, { [id]: 1 });
+    marketSale(f, GOODS_BY_ID[id].value, 1, now);
     bells = GOODS_BY_ID[id].value;
     f.bells += bells;
   }
@@ -640,12 +651,35 @@ export function skipRequest(profile, slot, now) {
   return withFarm(profile, f);
 }
 
-export function sell(profile, itemId, n = 1) {
+// The market buys up to MARKET_BELLS a day (selling, and selling a craft
+// straight from the workshop); requests always pay. In the school-year sim a
+// daily player earning 2 million Bells for 7,000 Bells of things to buy, so
+// all-day selling doesn't pay (sim/, 2026-11-20). Resets each morning.
+export const MARKET_BELLS = 200;
+export function marketLeft(profile, now = Date.now()) {
+  const m = farmOf(profile).market;
+  return Math.max(0, MARKET_BELLS - (m && m.day === dayKey(now) ? m.sold : 0));
+}
+function marketSale(f, value, n, now) {
+  const today = dayKey(now);
+  const sold = f.market && f.market.day === today ? f.market.sold : 0;
+  const left = MARKET_BELLS - sold;
+  if (left <= 0) throw new Error('the market is full today');
+  const k = Math.min(n, Math.max(1, Math.ceil(left / value)));
+  f.market = { day: today, sold: sold + k * value };
+  return k;
+}
+
+/** Sell up to n of an item (fewer if the market fills up today). Returns { profile, bells, n }. */
+export function sell(profile, itemId, n = 1, now = Date.now()) {
   const f = clone(farmOf(profile));
   takeItems(f, { [itemId]: n });
-  const bells = GOODS_BY_ID[itemId].value * n;
+  const value = GOODS_BY_ID[itemId].value;
+  const k = marketSale(f, value, n, now);
+  if (k < n) addItem(f, itemId, n - k);
+  const bells = value * k;
   f.bells += bells;
-  return { profile: withFarm(profile, f), bells };
+  return { profile: withFarm(profile, f), bells, n: k };
 }
 
 // ---------- Building ----------
@@ -692,18 +726,19 @@ export function buyPen(profile) {
 }
 
 /** Why a biome can't open yet, or null if it can. */
-export function biomeBlock(profile, biomeId) {
+export function biomeBlock(profile, biomeId, now = Date.now()) {
   const f = farmOf(profile);
   const b = BIOMES_BY_ID[biomeId];
   if (biomeOpen(f, biomeId)) return 'open';
+  if (b.from && dayKey(now) < b.from) return 'date';
   if (farmLevel(f) < b.level) return 'level';
   if (b.elements.length && !b.elements.some((e) => crewElements(f, 'build').has(e))) return 'element';
   if (f.bells < biomeCost(profile, biomeId)) return 'bells';
   return null;
 }
 
-export function openBiome(profile, biomeId, now) {
-  const block = biomeBlock(profile, biomeId);
+export function openBiome(profile, biomeId, now = Date.now()) {
+  const block = biomeBlock(profile, biomeId, now);
   if (block) throw new Error(`can't open: ${block}`);
   const f = clone(farmOf(profile));
   spendBells(f, biomeCost(profile, biomeId));
@@ -931,7 +966,7 @@ export function goldenSeason(profile, now) {
 export const EXPEDITION_SUN = { short: 15, big: 40 };
 export const TEAM_SIZE_FOR = { short: 3, big: 6 };
 export const NEED_SPEED = 0.25; // each need met: +25% speed
-export const EXPEDITION_SHARDS = { short: 3, big: 8 };
+export const EXPEDITION_SHARDS = { short: 1, big: 3 }; // was 3/8: shards piled up unused (sim/, 2026-11-20)
 export const EXPEDITION_BELLS = { short: 15, big: 40 };
 export const EXPLORER_CHANCE = 0.3;
 export const EXPLORER_PITY = 3; // big trips on a route before its critter is guaranteed

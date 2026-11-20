@@ -19,14 +19,15 @@ test('correct answers climb boxes with growing intervals', () => {
   assert.equal(item.box, MAX_BOX, 'box is capped');
 });
 
-test('a miss sends the word back to box 0 and makes it due soon', () => {
+test('a miss costs 2 stars and makes the word due soon', () => {
+  const DAY = 24 * 3600e3;
   let item = newItem('cat', T0);
-  item = review(review(review(item, 'correct', T0), 'correct', T0), 'correct', T0);
+  item = review(review(review(item, 'correct', T0), 'correct', T0), 'correct', T0 + DAY);
   assert.equal(item.box, 3);
-  item = review(item, 'wrong', T0);
-  assert.equal(item.box, 0);
+  item = review(item, 'wrong', T0 + DAY);
+  assert.equal(item.box, 1);
   assert.equal(item.misses, 1);
-  assert.equal(item.dueAt, T0 + INTERVALS[0]);
+  assert.equal(item.dueAt, T0 + DAY + INTERVALS[0]);
 });
 
 test('a hinted answer keeps the box but comes back soon', () => {
@@ -107,13 +108,13 @@ test('mastered items need a refresh later; each refresh waits longer; problem it
   assert.ok(!needsRefresh(refreshed, later + DAY));
   const problem = { ...item, misses: PROBLEM_MISSES };
   assert.equal(refreshInterval(problem), refreshInterval(item) / 2);
-  // A miss on a mastered word sends it back to the start (mastery reward is kept).
+  // A miss on a mastered word costs 2 stars (mastery reward is kept).
   const missed = review(item, 'wrong', later);
-  assert.equal(missed.box, 0);
+  assert.equal(missed.box, MAX_BOX - 2);
   assert.equal(missed.masteredAt, item.masteredAt);
 });
 
-test('optional star rules: one star a day from dailyFrom up, and a miss costing missDrop stars', () => {
+test('star rules: one star a day from 2 stars up (spelling, Word Match), and a miss costs 2 stars', () => {
   const saved = { ...STAR_RULES };
   try {
     Object.assign(STAR_RULES, { dailyFrom: 2, missDrop: 2 });
@@ -121,6 +122,7 @@ test('optional star rules: one star a day from dailyFrom up, and a miss costing 
     let now = T0;
     for (let i = 0; i < 6; i++) item = review(item, 'correct', (now += 60e3));
     assert.equal(item.box, 2, 'two stars on the first day');
+    assert.deepEqual({ ...saved }, { dailyFrom: 2, missDrop: 2 }, 'on by default (Jason, 2026-11-20)');
     assert.equal(item.correct, 6, 'right answers still count');
     item = review(item, 'correct', T0 + 86400e3);
     item = review(item, 'correct', T0 + 86400e3 + 60e3);
