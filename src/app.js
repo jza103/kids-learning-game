@@ -469,7 +469,7 @@ const screens = {
     return `${topbar('My words')}
       <div class="card">${superProgressHtml(p)}</div>
       <div class="card">
-        <p class="small muted">Each right answer adds a star, spread out over days. A miss starts the word over. Five stars means mastered!</p>
+        <p class="small muted">The first 2 stars come quickly; after that a word earns one new star a day, so practicing a little every day wins. A miss takes away 2 stars. Five stars means mastered!</p>
         <table>${sorted.map(row).join('')}</table>
       </div>`;
   },
@@ -555,7 +555,7 @@ const screens = {
                   .join('')}</table>`
               : ''
           }
-          <p class="small muted">Mastery is a 0–${MAX_BOX} star rating. Each correct answer adds a star, with waits that grow from minutes to a week, so a word takes about a week to master. A miss starts it over.
+          <p class="small muted">Mastery is a 0–${MAX_BOX} star rating. The first 2 stars can come in one round; from then on a word earns at most one new star a day, so a word takes at least 4 days of practice to master and cramming a list in one sitting doesn't (Word Match works the same way; times tables don't wait). A miss takes away 2 stars.
             🔊 plays a word the way the kids hear it. ✕ deletes a word completely (for typos), stars and all. Coins and cards already earned stay.</p>
           <p class="small muted preview-status"></p>
         </div>
@@ -908,6 +908,7 @@ function submitAnswer(value) {
     g.zap = `💥${hit.damage > 1 ? ` ×${hit.damage}` : ''}`;
     g.anim = defeated ? 'down' : 'hit';
     g.feedback = defeated ? `You beat ${defeated.monster.name}! ${defeated.monster.emoji}` : ['Nice!', 'Yes!', 'Great spelling!', 'Boom!'][Math.floor(Math.random() * 4)];
+    if (rec.starWaits && !defeated) g.feedback += ' Next ⭐ for this word tomorrow.';
     if (rec.mastered) {
       g.mastered.push(g.word.id);
       g.earned.coins += MASTERY_COINS;

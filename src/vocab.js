@@ -2,7 +2,7 @@
 // tapping (no typing). Each kid has their own vocabulary list, kept apart from
 // spelling words, with the same 0-5 star spaced-repetition mastery. All
 // functions are pure: they take a profile and return a new one.
-import { newItem, review, pickNext } from './srs.js';
+import { MAX_BOX, newItem, review, pickNext } from './srs.js';
 import { coinsForAnswer, earnCoins, rewardMastery } from './economy.js';
 import { learnRewards } from './sunshine.js';
 import { claimLegends } from './legend.js';
@@ -170,5 +170,7 @@ export function recordMatch(profile, id, result, now, powers = { xp: 0 }) {
   }
   let sun, shards;
   ({ profile: next, sun, shards } = learnRewards(next, before, result, now, { mastered }));
-  return { profile: next, coins, xp, mastered, legends, sun, shards };
+  // Right, but the word already earned its star today (STAR_RULES.dailyFrom).
+  const starWaits = result === 'correct' && after.box === before.box && before.box < MAX_BOX;
+  return { profile: next, coins, xp, mastered, starWaits, legends, sun, shards };
 }

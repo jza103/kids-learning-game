@@ -131,6 +131,7 @@ function collectAll(p, now, rng, stats) {
 }
 
 function trade(p, now, stats) {
+  // Requests first (they pay more), then sell extras while the market buys.
   for (let s = 0; s < F.REQUEST_SLOTS; s++) {
     const r = tryDo(() => F.fillRequest(p, s, now));
     if (r) {
@@ -143,8 +144,8 @@ function trade(p, now, stats) {
   const f = F.farmOf(p);
   for (const [id, n] of Object.entries(f.items)) {
     const keep = GOODS_BY_ID[id]?.kind === 'craft' ? 0 : 6;
-    if (n > keep) {
-      const r = F.sell(p, id, n - keep);
+    if (n > keep && F.marketLeft(p, now) > 0) {
+      const r = F.sell(p, id, n - keep, now);
       p = r.profile;
       stats.bells += r.bells;
       stats.sold = stats.sold || {};
@@ -165,12 +166,12 @@ function build(p, now, stats) {
     const pc = F.plotCost(p);
     if (pc != null) options.push({ cost: pc, go: F.buyPlot });
     for (const b of BIOMES) {
-      const block = F.biomeBlock(p, b.id);
+      const block = F.biomeBlock(p, b.id, now);
       if (block === 'element') {
         const helper = owned(p).find((id) => b.elements.includes(farmTrait(id).element) && !f.expeditions.some((e) => e.team.includes(id)));
         if (helper) {
           const q = staff(p, helper);
-          if (!F.biomeBlock(q, b.id)) options.push({ cost: F.biomeCost(q, b.id), go: () => F.openBiome(q, b.id, now) });
+          if (!F.biomeBlock(q, b.id, now)) options.push({ cost: F.biomeCost(q, b.id), go: () => F.openBiome(q, b.id, now) });
         }
       } else if (!block) options.push({ cost: F.biomeCost(p, b.id), go: (q) => F.openBiome(q, b.id, now) });
     }

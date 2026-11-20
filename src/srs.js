@@ -39,7 +39,7 @@ export function needsRefresh(item, now = Date.now()) {
 //   a day (null = no limit). Rewards spaced practice over one-day cramming.
 //   Math opts out (review(..., { daily: false })): Jason, no cap on facts.
 // missDrop: stars lost on a miss (MAX_BOX = back to 0, the classic Leitner rule).
-export const STAR_RULES = { dailyFrom: null, missDrop: MAX_BOX };
+export const STAR_RULES = { dailyFrom: 2, missDrop: 2 };
 
 export function newItem(id, now) {
   return { id, box: 0, dueAt: now, seen: 0, correct: 0, misses: 0, lastResult: null, masteredAt: null };
