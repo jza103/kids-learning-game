@@ -9,7 +9,7 @@ import {
   FARM_XP_PER_DAY, XP_PER_LEVEL, FORAGE_MAX_SUN, GOODY_MAX_CYCLES, FERTILIZER_SHARDS, BABY_PITY, START_BELLS, newFarm, journalProgress,
   pourSun, goldenSeason, MORNING_RAIN, GOLDEN_MAX, sendExpedition, collectExpedition, benchFriends, needsMet, expeditionSlots, welcomeExplorer,
   EXPEDITION_SUN, EXPEDITION_SHARDS, nextExpansion, expandCrew, pourTips, sunUseful, EXPAND_LEVEL, MAX_SLOTS,
-  isTired, stationPower, sunToNext, handOf, friendRank, allRounder, whereIs, ENERGY_MAX, MORNING_ENERGY, TRIP_ENERGY, RANKS,
+  isTired, stationPower, sunToNext, craftProfit, handOf, friendRank, allRounder, whereIs, ENERGY_MAX, MORNING_ENERGY, TRIP_ENERGY, RANKS,
 } from '../src/farm.js';
 import { newProfile } from '../src/profile.js';
 import { mulberry32 } from '../src/rng.js';
@@ -535,4 +535,19 @@ test('pour just enough for the next thing to finish', () => {
   assert.equal(p.sunJar, 47);
   assert.equal(harvestAll(p, T0).harvested.length, 1);
   assert.equal(sunToNext(p).id, 'strawberry');
+});
+
+test('the workshop earns Bells: crafts are worth more than their materials and can be sold on the spot', async () => {
+  const { RECIPES } = await import('../src/farm-content.js');
+  for (const r of RECIPES) assert.ok(craftProfit(r) > 0, r.id);
+  let p = open(kid([]));
+  p.farm = { ...p.farm, items: { corn: 2, honey: 1 } };
+  const bells = p.farm.bells;
+  p = startCraft(p, 'bread', T0);
+  assert.equal(p.farm.bells, bells, 'crafting costs no Bells');
+  p = shine(p, 5);
+  const r = collectCraft(p, T0, { sellNow: true });
+  assert.equal(r.bells, 40);
+  assert.equal(r.profile.farm.bells, bells + 40);
+  assert.equal(r.profile.farm.items.bread || 0, 0);
 });

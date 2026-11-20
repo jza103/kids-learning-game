@@ -87,7 +87,7 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - **Randomized rewards: decided (2026-11-19)** after Jason tested Blooket with the kids: collectibles with rarity via packs, kept mild. Odds shown, pity guarantees, duplicates → shards, daily cap, kid picks a theme, collectibles give in-game powers and fill a collection book, coins only from correct answers (missed words pay more, mastered less), parent writes the content. Background in `appeal-analysis.md`.
 
 ## Where we left off
-- Last done (2026-11-21): Pour button gains "Pour N, finishes the next thing" next to Pour all. Before that, Friend Grove round 4: Friends roster tab, friend energy and farm ranks (rotation), and a grown-ups button to add Sunshine (+10/+50/+200) for testing.
+- Last done (2026-11-21): Workshop shows sell prices and profit, "Sell for 🔔" on the spot, and a shelf to sell crafts (crafting never cost Bells; Build still does). Before that, Pour button gains "Pour N, finishes the next thing" next to Pour all. Before that, Friend Grove round 4: Friends roster tab, friend energy and farm ranks (rotation), and a grown-ups button to add Sunshine (+10/+50/+200) for testing.
 - Before that (2026-11-21): Friend Grove round 3: bought crew-area expansions, routes and treasures per land, farm XP from Sunshine, pour-time speed and the pour warning.
 - Before that (2026-11-21): Friend Grove round 2: Sunshine from learning replaces clock timers, Golden Season, expeditions, Wishing Well, and new shard sources (refreshes, expeditions).
 - Before that (2026-11-21): Friend Grove farm side game (see above). Also fixed a missing `}` in `styles.css` that made the times tables, gold and Legendary styles show only on phone-sized screens.

@@ -562,7 +562,8 @@ export function canCraft(farm, recipe) {
   return Object.entries(recipe.needs).every(([id, n]) => (farm.items[id] || 0) >= n);
 }
 
-export function collectCraft(profile, now) {
+/** Bring a finished craft out of the workshop; with sellNow it's sold for Grove Bells right away. */
+export function collectCraft(profile, now, { sellNow = false } = {}) {
   const f = clone(farmOf(profile));
   if (!f.workshop || !plotReady(f.workshop)) throw new Error('not ready');
   const id = f.workshop.recipe;
@@ -570,8 +571,17 @@ export function collectCraft(profile, now) {
   f.workshop = null;
   const events = [];
   gainXp(f, FARM_XP.craft, now, events);
-  return { profile: withFarm(profile, f), id, events: [...events, ...stampEvents(f)] };
+  let bells = 0;
+  if (sellNow) {
+    takeItems(f, { [id]: 1 });
+    bells = GOODS_BY_ID[id].value;
+    f.bells += bells;
+  }
+  return { profile: withFarm(profile, f), id, bells, events: [...events, ...stampEvents(f)] };
 }
+
+/** Grove Bells a recipe earns over selling its materials as they are. */
+export const craftProfit = (recipe) => recipe.value - Object.entries(recipe.needs).reduce((sum, [id, n]) => sum + GOODS_BY_ID[id].value * n, 0);
 
 // ---------- Requests and selling ----------
 function availableGoods(f) {

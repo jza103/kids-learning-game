@@ -31,7 +31,7 @@ import { initMath } from './mathgame.js';
 import { initFarm } from './farmui.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-21.6';
+const APP_VERSION = '2026-11-21.7';
 const app = document.getElementById('app');
 let data = load();
 // claimLegends also catches sets finished before Legendaries existed.
