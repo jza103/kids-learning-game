@@ -9,6 +9,7 @@ import {
   FARM_XP_PER_DAY, XP_PER_LEVEL, FORAGE_MAX_SUN, GOODY_MAX_CYCLES, FERTILIZER_SHARDS, BABY_PITY, START_BELLS, newFarm, journalProgress,
   pourSun, goldenSeason, MORNING_RAIN, GOLDEN_MAX, sendExpedition, collectExpedition, benchFriends, needsMet, expeditionSlots, welcomeExplorer,
   EXPEDITION_SUN, EXPEDITION_SHARDS, nextExpansion, expandCrew, pourTips, sunUseful, EXPAND_LEVEL, MAX_SLOTS,
+  isTired, stationPower, handOf, friendRank, allRounder, whereIs, ENERGY_MAX, MORNING_ENERGY, TRIP_ENERGY, RANKS,
 } from '../src/farm.js';
 import { newProfile } from '../src/profile.js';
 import { mulberry32 } from '../src/rng.js';
@@ -164,7 +165,9 @@ test('forage needs a crew and stops piling up', () => {
   assert.equal(forageWaiting(shine(p, 20)), 0);
   p = assignCrew(p, g, 'forage');
   assert.equal(forageWaiting(shine(p, 20)), 4);
-  assert.equal(forageWaiting(shine(p, 500)), FORAGE_MAX_SUN * 0.1 * 2);
+  const worn = shine(p, 500);
+  assert.equal(isTired(worn.farm, g), true, 'working 500 Sunshine wears a friend out');
+  assert.equal(forageWaiting(worn), FORAGE_MAX_SUN * 0.1 * stationPower(worn, 'forage'));
   const r = collectForage(shine(p, 15), T0, mulberry32(3));
   assert.equal(Object.values(r.found).reduce((a, b) => a + b, 0), 3);
   assert.ok(Math.abs(r.profile.farm.forageCarry) < 1e-9);
@@ -466,4 +469,58 @@ test('Wishing Well: a missing friend with the chosen trait, never ultra; coins u
   // Owning every common/rare/epic with the trait: nothing to wish for.
   const all = Object.fromEntries(ALL_ITEMS.map((i) => [i.id, 1]));
   assert.equal(canWish({ ...p, collection: all }, attr, 'coins', T0).reason, 'none');
+});
+
+test('friends tire while working, rest back with Sunshine, and learn know-how', () => {
+  const [a, b] = first5.filter((i) => i.rarity === 'common').slice(0, 2).map((i) => i.id);
+  let p = open(kid([a, b]));
+  p = assignCrew(p, a, 'fields');
+  p = plant(p, 0, 'carrot', T0);
+  const fresh = workPower(p, a, 'fields');
+  p = pourSun({ ...p, sunJar: 60 }, 60).profile;
+  assert.equal(handOf(p.farm, a).energy, ENERGY_MAX - 60);
+  assert.equal(handOf(p.farm, b).energy, ENERGY_MAX, 'resting friends stay full');
+  assert.equal(friendRank(p.farm, a), 1);
+  assert.ok(workPower(p, a, 'fields') >= fresh);
+  p = pourSun({ ...p, sunJar: 80 }, 80).profile;
+  assert.equal(isTired(p.farm, a), true);
+  const xp = handOf(p.farm, a).xp;
+  assert.equal(xp, 100, 'a tired friend learns nothing more');
+  assert.ok(workPower(p, a, 'fields') < fresh + 1);
+  assert.ok(pourTips(p).some((t) => t.id === 'tired'));
+  // Swap: rest the tired friend, it recovers from Sunshine and a new morning.
+  p = removeCrew(p, a);
+  p = assignCrew(p, b, 'fields');
+  p = pourSun({ ...p, sunJar: 10 }, 10).profile;
+  assert.equal(handOf(p.farm, a).energy, 30);
+  p = open(p, T0 + DAY);
+  assert.equal(handOf(p.farm, a).energy, 30 + MORNING_ENERGY);
+  assert.equal(whereIs(p.farm, b), 'fields');
+  assert.equal(whereIs(p.farm, a), null);
+  assert.equal(RANKS.length, 5);
+});
+
+test('expeditions use energy and teach the team', () => {
+  const ids = first5.slice(0, 12).map((i) => i.id);
+  let p = open(kid(ids));
+  const i = p.farm.routes.list.findIndex((r) => ROUTES_BY_ID[r.route].size === 'short');
+  const team = benchFriends(p).slice(0, 3);
+  p = sendExpedition(p, i, team, T0);
+  assert.equal(handOf(p.farm, team[0]).energy, ENERGY_MAX - TRIP_ENERGY.short);
+  assert.equal(whereIs(p.farm, team[0]), 'trip');
+  p = shine(p, 15);
+  assert.equal(handOf(p.farm, team[0]).energy, ENERGY_MAX - TRIP_ENERGY.short, 'no rest while away');
+  p = collectExpedition(p, 0, T0, () => 0).profile;
+  assert.equal(handOf(p.farm, team[0]).xp, EXPEDITION_SUN.short);
+});
+
+test('working every area makes an All-Rounder', () => {
+  const a = first5[0].id;
+  let p = open(kid([a]));
+  for (const st of ['fields', 'pens', 'forage', 'workshop', 'build']) {
+    p = assignCrew(p, a, st);
+    p = pourSun({ ...p, sunJar: 20 }, 20).profile;
+    p.farm.hands[a].energy = ENERGY_MAX;
+  }
+  assert.equal(allRounder(p.farm, a), true);
 });

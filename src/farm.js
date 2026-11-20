@@ -230,6 +230,48 @@ export function stationOf(farm, friendId) {
   return STATION_IDS.find((s) => farm.crew[s].includes(friendId)) || null;
 }
 
+// ---------- Friend energy and know-how ----------
+// Each friend has ⚡ energy and its own farm XP (know-how). Working uses energy
+// as Sunshine is poured; resting friends get it back from the same Sunshine
+// (and a bit every morning), so it follows learning, not the clock. A tired
+// friend still works, just at half power and without learning anything, which
+// nudges kids to swap crews around instead of leaving one crew in place.
+export const ENERGY_MAX = 100;
+export const ENERGY_USE = 1; // per Sunshine poured, for each friend on a crew
+export const ENERGY_REST = 3; // per Sunshine poured, for each friend resting
+export const MORNING_ENERGY = 30;
+export const TIRED_POWER = 0.5;
+export const TRIP_ENERGY = { short: 20, big: 40 };
+export const RANKS = [
+  { name: 'New Hand', emoji: '🌱', xp: 0 },
+  { name: 'Helper', emoji: '🌿', xp: 30 },
+  { name: 'Skilled', emoji: '🌳', xp: 90 },
+  { name: 'Expert', emoji: '⭐', xp: 200 },
+  { name: 'Master', emoji: '🌟', xp: 400 },
+];
+export const JOB_STAMP_SUN = 20; // Sunshine worked in an area to earn its stamp
+export const newHand = () => ({ energy: ENERGY_MAX, xp: 0, jobs: {} });
+export const handOf = (farm, id) => farm.hands?.[id] || newHand();
+export function friendRank(farm, id) {
+  const xp = handOf(farm, id).xp;
+  let r = 0;
+  while (r + 1 < RANKS.length && xp >= RANKS[r + 1].xp) r++;
+  return r; // 0..4
+}
+export const jobStamps = (farm, id) => STATION_IDS.filter((st) => (handOf(farm, id).jobs[st] || 0) >= JOB_STAMP_SUN);
+export const allRounder = (farm, id) => jobStamps(farm, id).length === STATION_IDS.length;
+export const isTired = (farm, id) => handOf(farm, id).energy <= 0;
+const editHand = (f, id) => {
+  f.hands ||= {};
+  return (f.hands[id] ||= newHand());
+};
+function rankUp(f, id, gain, events) {
+  const before = friendRank(f, id);
+  editHand(f, id).xp += gain;
+  const after = friendRank(f, id);
+  if (after > before) events.push({ type: 'rank', id, rank: after });
+}
+
 /**
  * How much one friend adds at a station: 2 if it's its job (1 if not), plus
  * its evolution bonus, +1 gold, +1 for ultra and legendary.
@@ -240,7 +282,10 @@ export function workPower(profile, friendId, station) {
   if (!trait || !item) return 0;
   const info = friendInfo(profile, friendId);
   const top = item.rarity === 'ultra' || item.rarity === 'legendary' ? 1 : 0;
-  return (JOBS[trait.job].station === station ? 2 : 1) + info.stage.bonus + (info.gold ? 1 : 0) + top;
+  const f = farmOf(profile);
+  const skill = Math.floor(friendRank(f, friendId) / 2) + (allRounder(f, friendId) ? 1 : 0);
+  const power = (JOBS[trait.job].station === station ? 2 : 1) + info.stage.bonus + (info.gold ? 1 : 0) + top + skill;
+  return isTired(f, friendId) ? power * TIRED_POWER : power;
 }
 
 export function stationPower(profile, station) {
@@ -770,6 +815,20 @@ export function pourSun(profile, amount = null, now = Date.now()) {
   for (const e of f.expeditions) grow(e, expeditionSpeed(e));
   f.clock += n;
   const events = [];
+  const onTrip = new Set(f.expeditions.flatMap((e) => e.team));
+  for (const id of Object.keys(profile.collection || {})) {
+    if (!ITEMS_BY_ID[id] || onTrip.has(id)) continue;
+    const st = stationOf(f, id);
+    const h = editHand(f, id);
+    if (!st) {
+      if (h.energy < ENERGY_MAX) h.energy = Math.min(ENERGY_MAX, h.energy + n * ENERGY_REST);
+      continue;
+    }
+    const worked = Math.min(n, h.energy / ENERGY_USE);
+    h.energy = Math.max(0, h.energy - n * ENERGY_USE);
+    h.jobs[st] = (h.jobs[st] || 0) + n;
+    if (worked > 0) rankUp(f, id, Math.round(worked), events);
+  }
   gainXp(f, n * FARM_XP.sun, now, events);
   return { profile: { ...withFarm(profile, f), sunJar: sunJar(profile) - n }, poured: n, events };
 }
@@ -812,6 +871,8 @@ export function pourTips(profile) {
   if (empty) tips.push({ id: 'plots', text: `${empty} empty plot${empty > 1 ? 's' : ''}: plant first so they grow too` });
   if (f.plots.some((p) => p && !plotReady(p)) && !f.crew.fields.length) tips.push({ id: 'growers', text: 'nobody on the Fields crew: crops grow faster with friends there' });
   if (!f.workshop && RECIPES.some((r) => biomeOpen(f, r.biome) && canCraft(f, r))) tips.push({ id: 'workshop', text: 'the workshop is free and you can make something' });
+  const tired = STATION_IDS.flatMap((st) => f.crew[st]).filter((id) => isTired(f, id)).length;
+  if (tired) tips.push({ id: 'tired', text: `${tired} friend${tired > 1 ? 's are' : ' is'} too tired to learn: swap in rested friends` });
   const openRoute = (f.routes?.list || []).some((r) => !r.done);
   if (f.expeditions.length < expeditionSlots(f) && openRoute && benchFriends(profile).length >= 3) tips.push({ id: 'trips', text: 'a team could go on an expedition' });
   return tips;
@@ -915,6 +976,10 @@ export function sendExpedition(profile, routeIndex, team, now) {
   const free = new Set(benchFriends(profile));
   if (!unique.every((id) => free.has(id))) throw new Error('a friend is busy');
   const met = needsMet(unique, r.needs);
+  for (const id of unique) {
+    const h = editHand(f, id);
+    h.energy = Math.max(0, h.energy - TRIP_ENERGY[route.size]);
+  }
   f.expeditions.push({ route: route.id, team: unique, grown: 0, need: EXPEDITION_SUN[route.size], met, size: route.size });
   r.done = true;
   return withFarm(profile, f);
@@ -932,6 +997,12 @@ const STORY = {
     'A storm rolled over {r}, but {a} found shelter, {b} told stories, and {c} discovered {t}.',
   ],
 };
+
+/** Where a friend is on the farm: a station id, 'trip', or null (resting). */
+export function whereIs(farm, id) {
+  if (farm.expeditions.some((e) => e.team.includes(id))) return 'trip';
+  return stationOf(farm, id);
+}
 
 /** The explorer critter that lives on a route (big trips only). */
 export const routeExplorer = (routeId) => EXPLORERS.find((c) => c.route === routeId) || null;
@@ -969,6 +1040,7 @@ export function collectExpedition(profile, index, now, rng = Math.random) {
     .replace('{t}', `${n} ${treasure.name}${n > 1 && !/[sy]$/.test(treasure.name) ? 's' : ''}`);
   f.stories = [{ route: route.id, text: story, team: e.team }, ...f.stories].slice(0, 20);
   f.expeditions.splice(index, 1);
+  for (const id of e.team) rankUp(f, id, EXPEDITION_SUN[e.size], events);
   gainXp(f, FARM_XP_TRIP[e.size], now, events);
   const shards = EXPEDITION_SHARDS[e.size];
   const next = { ...withFarm(profile, f), shards: (profile.shards || 0) + shards };
@@ -1001,6 +1073,7 @@ export function visitFarm(profile, now, rng = Math.random) {
   if (f.rainDay !== today) {
     f.rainDay = today;
     jar += MORNING_RAIN;
+    for (const h of Object.values(f.hands || {})) h.energy = Math.min(ENERGY_MAX, h.energy + MORNING_ENERGY);
     events.push({ type: 'rain', n: MORNING_RAIN });
   }
   // Golden Season: nothing left to learn, so the farm grows on its own.

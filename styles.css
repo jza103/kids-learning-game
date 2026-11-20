@@ -346,3 +346,11 @@ button.sun-btn { background: linear-gradient(135deg, #f59e0b, #f97316); color: #
 .wish-card { border-color: #a78bfa; background: linear-gradient(135deg, #f5f0ff, #eef6ff); }
 .collectible .trait { margin-top: 4px; }
 .card > .route + .route { border-top: 1px solid var(--line, #e5e7f0); margin-top: 10px; padding-top: 10px; }
+.hand { display: inline-block; font-size: .78rem; padding: 1px 8px; border-radius: 999px; background: #eef7e8; color: #35602a; }
+.hand.tired { background: #fdecec; color: #8a2b2b; }
+.energy { height: 5px; max-width: 160px; background: var(--line, #e5e7f0); border-radius: 999px; overflow: hidden; margin-top: 4px; }
+.energy > div { height: 100%; background: linear-gradient(90deg, #ffd34d, #7bd88f); }
+.roster-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--line, #e5e7f0); padding: 10px 0; }
+.roster-row:first-child { border-top: 0; }
+.roster-row.tired .big-emoji { filter: grayscale(.6); }
+.roster-moves { display: flex; gap: 4px; flex-wrap: wrap; }
