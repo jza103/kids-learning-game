@@ -4,6 +4,7 @@
 // functions are pure: they take a profile and return a new one.
 import { newItem, review, pickNext } from './srs.js';
 import { coinsForAnswer, earnCoins, rewardMastery } from './economy.js';
+import { learnRewards } from './sunshine.js';
 import { claimLegends } from './legend.js';
 import { XP_PER, applyXpBoost } from './progress.js';
 import { normalize } from './profile.js';
@@ -164,5 +165,7 @@ export function recordMatch(profile, id, result, now, powers = { xp: 0 }) {
     next = rewardMastery(next);
     ({ profile: next, newly: legends } = claimLegends(next));
   }
-  return { profile: next, coins, xp, mastered, legends };
+  let sun, shards;
+  ({ profile: next, sun, shards } = learnRewards(next, before, result, now, { mastered }));
+  return { profile: next, coins, xp, mastered, legends, sun, shards };
 }

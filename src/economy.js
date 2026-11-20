@@ -2,6 +2,7 @@
 // profile and return a new one, so they're easy to test.
 import { THEMES, ITEMS_BY_ID, ALL_ITEMS, themesOpen, GOLD_RARITIES } from './content.js';
 import { weightedPick, dayKey } from './rng.js';
+import { farmTrait } from './farm-content.js';
 
 // --- Coins: earned per correct answer, never for just finishing a round. ---
 // Paid by the word's box *before* the answer: shaky words pay more,
@@ -240,4 +241,75 @@ export function openSuperPack(profile, themeId, rng = Math.random, now = Date.no
     profile: { ...next, collection: { ...profile.collection, [item.id]: 1 } },
     result: { item, rarity: item.rarity, duplicate: false, shards: 0, super: true, themeId: item.theme },
   };
+}
+
+// --- Wishing Well: a missing friend with the element or job you pick ---
+// So a kid who needs (say) a Frost friend for the farm doesn't have to rely on
+// luck. Two ways to wish, neither can give an ultra or Legendary:
+//  coins:  costs today's pack price + WISH_EXTRA and uses one of today's
+//          packs; rarity is rolled like a pack (and counts for pity).
+//  shards: pick the rarity yourself and pay WISH_SHARDS for it.
+export const WISH_EXTRA = 20;
+export const WISH_SHARDS = { common: 15, rare: 45, epic: 110 };
+export const WISH_RARITIES = ['common', 'rare', 'epic'];
+
+/** Missing common/rare/epic friends in open themes with that trait. */
+export function wishPool(profile, attr, now = Date.now(), rarity = null) {
+  return themesOpen(now)
+    .flatMap((t) => t.items.map((i) => ({ ...i, theme: t.id })))
+    .filter((i) => WISH_RARITIES.includes(i.rarity) && (!rarity || i.rarity === rarity) && !profile.collection[i.id])
+    .filter((i) => farmTrait(i.id)?.[attr.kind] === attr.value);
+}
+
+export function wishCoinCost(profile, now) {
+  return packCost(profile, now) + WISH_EXTRA;
+}
+
+export function canWish(profile, attr, pay, now, rarity = null) {
+  if (!wishPool(profile, attr, now, pay === 'shards' ? rarity : null).length) return { ok: false, reason: 'none' };
+  if (pay === 'shards') {
+    if (!WISH_RARITIES.includes(rarity)) return { ok: false, reason: 'rarity' };
+    return profile.shards >= WISH_SHARDS[rarity] ? { ok: true } : { ok: false, reason: 'shards' };
+  }
+  if (packsLeftToday(profile, now) <= 0) return { ok: false, reason: 'cap' };
+  return profile.coins >= wishCoinCost(profile, now) ? { ok: true } : { ok: false, reason: 'coins' };
+}
+
+/**
+ * Make a wish. attr = { kind: 'element' | 'job', value }. pay = 'coins' |
+ * 'shards' (with rarity). Returns { profile, result } like openPack.
+ */
+export function makeWish(profile, attr, pay, now, rng = Math.random, rarity = null) {
+  const check = canWish(profile, attr, pay, now, rarity);
+  if (!check.ok) throw new Error(`cannot wish: ${check.reason}`);
+  if (pay === 'shards') {
+    const pool = wishPool(profile, attr, now, rarity);
+    const item = pool[Math.floor(rng() * pool.length)];
+    return {
+      profile: { ...profile, shards: profile.shards - WISH_SHARDS[rarity], collection: { ...profile.collection, [item.id]: 1 } },
+      result: { item, rarity: item.rarity, duplicate: false, shards: 0, wish: true, themeId: item.theme },
+    };
+  }
+  const all = wishPool(profile, attr, now);
+  const today = dayKey(now);
+  const prev = profile.packs;
+  let rolled = rollRarity(prev, rng);
+  // If nothing with that trait is missing at the rolled rarity, step down, then up.
+  const order = [rolled, ...['epic', 'rare', 'common'].filter((r) => r !== rolled)];
+  rolled = order.find((r) => all.some((i) => i.rarity === r));
+  const pool = all.filter((i) => i.rarity === rolled);
+  const item = pool[Math.floor(rng() * pool.length)];
+  const next = {
+    ...profile,
+    coins: profile.coins - wishCoinCost(profile, now),
+    collection: { ...profile.collection, [item.id]: 1 },
+    packs: {
+      day: today,
+      openedToday: (prev.day === today ? prev.openedToday : 0) + 1,
+      sinceRare: item.rarity === 'common' ? prev.sinceRare + 1 : 0,
+      sinceEpic: item.rarity === 'epic' ? 0 : prev.sinceEpic + 1,
+      total: prev.total + 1,
+    },
+  };
+  return { profile: next, result: { item, rarity: item.rarity, duplicate: false, shards: 0, wish: true, themeId: item.theme } };
 }

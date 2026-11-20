@@ -3,6 +3,7 @@
 // functions: they take a profile and return a new one.
 import { newItem, review, isDue, pickNext, MAX_BOX, INTERVALS } from './srs.js';
 import { coinsForAnswer, earnCoins, SUPER_PACK_EVERY, BOX_COINS } from './economy.js';
+import { learnRewards } from './sunshine.js';
 import { claimLegends } from './legend.js';
 import { XP_PER, applyXpBoost } from './progress.js';
 
@@ -237,7 +238,9 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
   next.math = nextState;
   let legends = [];
   if (mastered) ({ profile: next, newly: legends } = claimLegends(next));
-  return { profile: next, coins, xp, mastered, superStep, battleResult: srsResult, warmup, legends };
+  let sun, shards;
+  ({ profile: next, sun, shards } = learnRewards(next, before, srsResult, now, { warmup, mastered }));
+  return { profile: next, coins, xp, mastered, superStep, battleResult: srsResult, warmup, legends, sun, shards };
 }
 
 // ---------- solve times ----------

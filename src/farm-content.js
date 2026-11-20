@@ -78,28 +78,28 @@ export const BIOMES = [
 export const BIOMES_BY_ID = Object.fromEntries(BIOMES.map((b) => [b.id, b]));
 
 // ---------- Things you can have (crops, goodies, forage, crafts) ----------
-// value: Grove Bells when sold. minutes: base grow / craft time.
-const crop = (id, name, emoji, element, biome, minutes, value) => ({ id, name, emoji, kind: 'crop', element, biome, minutes, value });
+// value: Grove Bells when sold. sun: Sunshine it takes to grow or craft.
+const crop = (id, name, emoji, element, biome, sun, value) => ({ id, name, emoji, kind: 'crop', element, biome, sun, value });
 export const CROPS = [
-  crop('carrot', 'Carrot', '🥕', 'earth', 'meadow', 15, 4),
-  crop('corn', 'Corn', '🌽', 'sun', 'meadow', 40, 8),
-  crop('strawberry', 'Strawberry', '🍓', 'water', 'meadow', 90, 14),
-  crop('lettuce', 'Ice Lettuce', '🥬', 'frost', 'frost', 30, 8),
-  crop('blueberry', 'Snowberry', '🫐', 'wind', 'frost', 120, 18),
-  crop('grapes', 'Sea Grapes', '🍇', 'water', 'tide', 45, 11),
-  crop('rice', 'Tide Rice', '🌾', 'water', 'tide', 90, 15),
-  crop('coconut', 'Coconut', '🥥', 'sun', 'tide', 180, 26),
-  crop('mushroom', 'Glowshroom', '🍄', 'glow', 'caves', 30, 10),
-  crop('pepper', 'Moon Pepper', '🌶️', 'glow', 'caves', 75, 17),
-  crop('melon', 'Star Melon', '🍈', 'earth', 'caves', 150, 28),
-  crop('puffcorn', 'Puffcorn', '🍿', 'wind', 'cloud', 45, 14),
-  crop('peach', 'Sky Peach', '🍑', 'wind', 'cloud', 120, 24),
-  crop('bloom', 'Rainbow Bloom', '🌸', 'sun', 'cloud', 240, 40),
+  crop('carrot', 'Carrot', '🥕', 'earth', 'meadow', 3, 4),
+  crop('corn', 'Corn', '🌽', 'sun', 'meadow', 6, 8),
+  crop('strawberry', 'Strawberry', '🍓', 'water', 'meadow', 10, 14),
+  crop('lettuce', 'Ice Lettuce', '🥬', 'frost', 'frost', 5, 8),
+  crop('blueberry', 'Snowberry', '🫐', 'wind', 'frost', 14, 18),
+  crop('grapes', 'Sea Grapes', '🍇', 'water', 'tide', 6, 11),
+  crop('rice', 'Tide Rice', '🌾', 'water', 'tide', 10, 15),
+  crop('coconut', 'Coconut', '🥥', 'sun', 'tide', 20, 26),
+  crop('mushroom', 'Glowshroom', '🍄', 'glow', 'caves', 5, 10),
+  crop('pepper', 'Moon Pepper', '🌶️', 'glow', 'caves', 9, 17),
+  crop('melon', 'Star Melon', '🍈', 'earth', 'caves', 16, 28),
+  crop('puffcorn', 'Puffcorn', '🍿', 'wind', 'cloud', 7, 14),
+  crop('peach', 'Sky Peach', '🍑', 'wind', 'cloud', 13, 24),
+  crop('bloom', 'Rainbow Bloom', '🌸', 'sun', 'cloud', 24, 40),
 ];
 
 // Wonder crops only grow from Wonder Seeds, which come from mastering.
-export const WONDER_GROW_MINUTES = 60;
-const wonder = (id, name, emoji, value) => ({ id, name, emoji, kind: 'wonder', minutes: WONDER_GROW_MINUTES, value });
+export const WONDER_SUN = 8;
+const wonder = (id, name, emoji, value) => ({ id, name, emoji, kind: 'wonder', sun: WONDER_SUN, value });
 export const WONDER_CROPS = [
   wonder('w-pumpkin', 'Golden Pumpkin', '🎃', 50),
   wonder('w-apple', 'Ruby Apple', '🍎', 50),
@@ -136,6 +136,15 @@ export const GOODIES = [
   goody('stardust', 'Star Dust', '🌟', 45),
 ];
 
+// Treasures: only found on expeditions (and made by explorer critters).
+const treasure = (id, name, emoji, region, value) => ({ id, name, emoji, kind: 'treasure', region, value });
+export const TREASURES = [
+  treasure('clover', 'Four-Leaf Clover', '🍀', 'woods', 18),
+  treasure('coral', 'Rainbow Coral', '🪸', 'coast', 24),
+  treasure('storm', 'Storm Crystal', '⚡', 'peaks', 30),
+  treasure('fallenstar', 'Fallen Star', '🌠', 'isle', 40),
+];
+
 // kind: 'wild' (visits, befriend with `likes`), 'baby' (a mix of two critters
 // in your pens), 'egg' (hatches from a Mystery Egg, earned by mastering sets).
 const wild = (id, name, emoji, element, biome, likes, makes) => ({ id, name, emoji, element, biome, likes, makes: [makes], kind: 'wild' });
@@ -167,7 +176,15 @@ const EGGS = [
   egg('puffwhale', 'Puffwhale', '🐋', 'water'),
   egg('jewelbug', 'Jewelbug', '🐞', 'earth'),
 ];
-CRITTERS.push(...BABIES, ...EGGS);
+// Explorer critters: only found on big expeditions in their region.
+const explorer = (id, name, emoji, element, region, makes) => ({ id, name, emoji, element, region, makes: [makes], kind: 'explorer' });
+const EXPLORERS = [
+  explorer('mossling', 'Mossling', '🦥', 'earth', 'woods', 'clover'),
+  explorer('reefpup', 'Reef Pup', '🦭', 'water', 'coast', 'coral'),
+  explorer('boltbird', 'Bolt Bird', '🦅', 'wind', 'peaks', 'storm'),
+  explorer('starfox', 'Comet Kit', '🐈', 'glow', 'isle', 'fallenstar'),
+];
+CRITTERS.push(...BABIES, ...EGGS, ...EXPLORERS);
 export const CRITTERS_BY_ID = Object.fromEntries(CRITTERS.map((c) => [c.id, c]));
 // Babies make both parents' goodies, and take the first parent's element and biome.
 for (const b of BABIES) {
@@ -177,23 +194,23 @@ for (const b of BABIES) {
   b.biome = z.biome;
 }
 
-const craft = (id, name, emoji, biome, needs, minutes, value) => ({ id, name, emoji, kind: 'craft', biome, needs, minutes, value });
+const craft = (id, name, emoji, biome, needs, sun, value) => ({ id, name, emoji, kind: 'craft', biome, needs, sun, value });
 export const RECIPES = [
-  craft('bread', 'Honey Bread', '🍞', 'meadow', { corn: 2, honey: 1 }, 30, 40),
-  craft('basket', 'Picnic Basket', '🧺', 'meadow', { carrot: 2, strawberry: 1, acorn: 2 }, 45, 60),
-  craft('sweater', 'Cozy Sweater', '🧥', 'meadow', { wool: 3, daisy: 1 }, 60, 55),
-  craft('slushie', 'Berry Slush', '🍧', 'frost', { blueberry: 2, icicle: 1 }, 40, 70),
-  craft('fondue', 'Cheese Fondue', '🫕', 'frost', { cheese: 2, lettuce: 2 }, 60, 75),
-  craft('riceball', 'Rice Ball', '🍙', 'tide', { rice: 2, grapes: 1 }, 30, 55),
-  craft('chime', 'Shell Chime', '🎐', 'tide', { shell: 3, feather: 1 }, 60, 85),
-  craft('lantern', 'Glow Lantern', '🏮', 'caves', { glowstone: 2, dust: 1 }, 60, 95),
-  craft('stew', 'Mushroom Stew', '🍲', 'caves', { mushroom: 3, pepper: 1, goo: 1 }, 45, 100),
-  craft('kite', 'Sky Kite', '🪁', 'cloud', { silk: 2, cloudpuff: 2 }, 90, 125),
-  craft('pie', 'Peach Pie', '🥧', 'cloud', { peach: 2, puffcorn: 2, honey: 1 }, 60, 120),
-  craft('musicbox', 'Music Box', '🎶', 'cloud', { note: 2, pearl: 1, coconut: 1 }, 90, 140),
+  craft('bread', 'Honey Bread', '🍞', 'meadow', { corn: 2, honey: 1 }, 5, 40),
+  craft('basket', 'Picnic Basket', '🧺', 'meadow', { carrot: 2, strawberry: 1, acorn: 2 }, 7, 60),
+  craft('sweater', 'Cozy Sweater', '🧥', 'meadow', { wool: 3, daisy: 1 }, 8, 55),
+  craft('slushie', 'Berry Slush', '🍧', 'frost', { blueberry: 2, icicle: 1 }, 6, 70),
+  craft('fondue', 'Cheese Fondue', '🫕', 'frost', { cheese: 2, lettuce: 2 }, 8, 75),
+  craft('riceball', 'Rice Ball', '🍙', 'tide', { rice: 2, grapes: 1 }, 5, 55),
+  craft('chime', 'Shell Chime', '🎐', 'tide', { shell: 3, feather: 1 }, 8, 85),
+  craft('lantern', 'Glow Lantern', '🏮', 'caves', { glowstone: 2, dust: 1 }, 8, 95),
+  craft('stew', 'Mushroom Stew', '🍲', 'caves', { mushroom: 3, pepper: 1, goo: 1 }, 7, 100),
+  craft('kite', 'Sky Kite', '🪁', 'cloud', { silk: 2, cloudpuff: 2 }, 12, 125),
+  craft('pie', 'Peach Pie', '🥧', 'cloud', { peach: 2, puffcorn: 2, honey: 1 }, 9, 120),
+  craft('musicbox', 'Music Box', '🎶', 'cloud', { note: 2, pearl: 1, coconut: 1 }, 12, 140),
 ];
 
-export const GOODS = [...CROPS, ...WONDER_CROPS, ...FORAGE, ...GOODIES, ...RECIPES];
+export const GOODS = [...CROPS, ...WONDER_CROPS, ...FORAGE, ...GOODIES, ...TREASURES, ...RECIPES];
 export const GOODS_BY_ID = Object.fromEntries(GOODS.map((g) => [g.id, g]));
 
 // ---------- Decorations ----------
@@ -219,6 +236,7 @@ export const DECOR = [
   { id: 'stamp-critters', name: 'Critter Totem', emoji: '🗿', stamp: 'critters' },
   { id: 'stamp-recipes', name: 'Chef Statue', emoji: '👩‍🍳', stamp: 'recipes' },
   { id: 'stamp-forage', name: 'Explorer Flag', emoji: '🚩', stamp: 'forage' },
+  { id: 'stamp-explore', name: 'Globe Statue', emoji: '🌐', stamp: 'explore' },
 ];
 export const DECOR_BY_ID = Object.fromEntries(DECOR.map((d) => [d.id, d]));
 
@@ -228,4 +246,34 @@ export const JOURNAL_PAGES = {
   critters: { name: 'Critters', emoji: '🐾', entries: CRITTERS },
   recipes: { name: 'Recipes', emoji: '🍲', entries: RECIPES },
   forage: { name: 'Forage', emoji: '🧺', entries: FORAGE },
+  explore: { name: 'Expeditions', emoji: '🗺️', entries: [] }, // filled below: treasures and souvenirs
 };
+
+// ---------- Expeditions ----------
+// Regions open as you collect map pieces. Each route is a trip for 3 (short)
+// or 6 (big) friends; finishing it the first time gives its souvenir.
+export const REGIONS = [
+  { id: 'woods', name: 'Whisper Woods', emoji: '🌲', pieces: 0 },
+  { id: 'coast', name: 'Crystal Coast', emoji: '🏝️', pieces: 5 },
+  { id: 'peaks', name: 'Thunder Peaks', emoji: '⛰️', pieces: 12 },
+  { id: 'isle', name: 'Starfall Isle', emoji: '🌠', pieces: 20 },
+];
+export const REGIONS_BY_ID = Object.fromEntries(REGIONS.map((r) => [r.id, r]));
+const route = (id, name, emoji, region, size, souvenir, souvenirEmoji) => ({ id, name, emoji, region, size, souvenir: { id: `souv-${id}`, name: souvenir, emoji: souvenirEmoji } });
+export const ROUTES = [
+  route('hollow', 'Mushroom Hollow', '🍄', 'woods', 'short', 'Spotted Cap', '🧢'),
+  route('creek', 'Babbling Creek', '🏞️', 'woods', 'short', 'Smooth Pebble', '🪨'),
+  route('oldoak', 'The Old Oak', '🌳', 'woods', 'big', 'Golden Acorn', '🌰'),
+  route('tidepath', 'Tide Path', '🦀', 'coast', 'short', 'Message Bottle', '🍾'),
+  route('lighthouse', 'Lighthouse Point', '🗼', 'coast', 'short', 'Tiny Lantern', '🏮'),
+  route('wreck', 'Sunken Ship', '🚢', 'coast', 'big', 'Pirate Coin', '🪙'),
+  route('pass', 'Windy Pass', '🌬️', 'peaks', 'short', 'Eagle Feather', '🪶'),
+  route('cave', 'Echo Cave', '🦇', 'peaks', 'short', 'Echo Shell', '🐚'),
+  route('summit', 'Thunder Summit', '🏔️', 'peaks', 'big', 'Summit Flag', '🚩'),
+  route('meteor', 'Meteor Field', '☄️', 'isle', 'short', 'Space Rock', '🌑'),
+  route('lagoon', 'Glow Lagoon', '🌊', 'isle', 'short', 'Glow Pearl', '🔮'),
+  route('observatory', 'Star Observatory', '🔭', 'isle', 'big', 'Star Map', '🗺️'),
+];
+export const ROUTES_BY_ID = Object.fromEntries(ROUTES.map((r) => [r.id, r]));
+export const SOUVENIRS = ROUTES.map((r) => r.souvenir);
+JOURNAL_PAGES.explore.entries = [...TREASURES, ...SOUVENIRS];
