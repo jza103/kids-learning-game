@@ -2,7 +2,7 @@
 // its own mastery rating (same Leitner boxes as spelling words). Pure
 // functions: they take a profile and return a new one.
 import { newItem, review, isDue, pickNext, MAX_BOX, INTERVALS } from './srs.js';
-import { coinsForAnswer, SUPER_PACK_EVERY, BOX_COINS } from './economy.js';
+import { coinsForAnswer, earnCoins, SUPER_PACK_EVERY, BOX_COINS } from './economy.js';
 import { XP_PER, applyXpBoost } from './progress.js';
 
 export const GAME_TYPE = 'math';
@@ -193,7 +193,9 @@ export function recordFact(profile, factId, result, { mode = 'speed', now = Date
     srs: { ...state.srs, [factId]: after },
     stats: { answered: state.stats.answered + 1, correct: state.stats.correct + (srsResult === 'wrong' ? 0 : 1) },
   };
-  let next = { ...profile, coins: profile.coins + coins, xp: profile.xp + xp };
+  const paid = earnCoins(profile, coins, now);
+  coins = paid.coins;
+  let next = { ...paid.profile, xp: profile.xp + xp };
   let superStep = false;
   if (mastered) {
     nextState.mastered = state.mastered + 1;

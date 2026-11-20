@@ -6,6 +6,7 @@ import { newBattle, applyAnswer } from './battle.js';
 import { applyXpBoost, levelForXp, XP_PER } from './progress.js';
 import { teamPowersFor, friendsAfterAnswer } from './friends.js';
 import { teamLineHtml, friendSummaryHtml } from './friendsui.js';
+import { coinPaceNote } from './economy.js';
 import {
   GAME_TYPE, OPS, MODES, ROUND_LENGTH, MAX_FACTOR, PRACTICE_MAX_BOX, PRACTICE_REWARD, SECONDS_CHOICES, UNLOCK_ORDER,
   FACT_MASTERY_COINS, FACTS_PER_SUPER_STEP, mathState, poolFor, pickFact, recordFact, maybeUnlock, unlockedTables,
@@ -173,6 +174,7 @@ export function initMath(ctx) {
           ${mastered.length ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((f) => `${esc(f.text)} = ${f.answer}`).join(', ')}!</strong> +${FACT_MASTERY_COINS * mastered.length} 🪙</p>` : ''}
           ${game.unlocked.map((u) => `<p style="font-size:1.2rem">🔓 <strong>The ${u.table}s ${OPS[u.op].symbol} are open in Smart mix!</strong></p>`).join('')}
           ${superProgressHtml(p)}
+          ${coinPaceNote(p, Date.now()) ? `<p class="small muted">${coinPaceNote(p, Date.now())}</p>` : ''}
           ${game.levelUp ? `<p style="font-size:1.3rem"><strong>Level up! You're level ${levelForXp(p.xp)}.</strong> Check the Locker for new stuff.</p>` : ''}
           ${game.mode === 'practice' ? `<p class="small muted">Practice pays half coins. Try ⚡ Speed for full coins and to master facts.</p>` : ''}
         </div>

@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {
   coinsForAnswer, BOX_COINS, COMEBACK_BONUS, PACK_COST, DAILY_PACK_CAP, RARE_PITY, EPIC_PITY,
   SHARDS_FOR_DUPLICATE, CRAFT_COST, ODDS, canOpenPack, openPack, rollRarity, craft, packsLeftToday,
-  pityStatus, themeProgress,
+  pityStatus, themeProgress, PACK_COSTS, packCost, COIN_PACE, earnCoins, coinsToday, coinPace, coinPaceNote, DAILY_COIN_MAX,
 } from '../src/economy.js';
+import { allFacts, recordFact } from '../src/math.js';
 import { THEMES } from '../src/content.js';
 import { newItem, review } from '../src/srs.js';
 import { mulberry32 } from '../src/rng.js';
@@ -60,17 +61,63 @@ test('odds add up to 1', () => {
   assert.ok(Math.abs(Object.values(ODDS).reduce((a, b) => a + b, 0) - 1) < 1e-9);
 });
 
-test('packs cost coins and are capped per day, resetting the next day', () => {
-  let p = rich(newProfile('A', T0), PACK_COST * (DAILY_PACK_CAP + 2));
+test('packs cost more the more you open in a day, are capped, and reset the next day', () => {
+  const dayTotal = PACK_COSTS.slice(0, DAILY_PACK_CAP).reduce((a, b) => a + b, 0);
+  let p = rich(newProfile('A', T0), dayTotal + PACK_COST * 2);
   const rng = mulberry32(7);
-  for (let i = 0; i < DAILY_PACK_CAP; i++) p = openPack(p, 'ocean', T0, rng).profile;
+  for (let i = 0; i < DAILY_PACK_CAP; i++) {
+    assert.equal(packCost(p, T0), PACK_COSTS[i]);
+    p = openPack(p, 'ocean', T0, rng).profile;
+  }
   assert.equal(p.coins, PACK_COST * 2);
   assert.equal(packsLeftToday(p, T0), 0);
   assert.deepEqual(canOpenPack(p, T0), { ok: false, reason: 'cap' });
   assert.throws(() => openPack(p, 'ocean', T0, rng));
   assert.equal(packsLeftToday(p, T0 + DAY), DAILY_PACK_CAP);
+  assert.equal(packCost(p, T0 + DAY), PACK_COST);
   p = openPack(p, 'ocean', T0 + DAY, rng).profile;
   assert.equal(p.packs.openedToday, 1);
+  for (let i = 1; i < PACK_COSTS.length; i++) assert.ok(PACK_COSTS[i] >= PACK_COSTS[i - 1]);
+});
+
+test('answers pay full coins at first, then half, then 1 each, resetting the next day', () => {
+  let p = newProfile('A', T0);
+  const [full, half] = COIN_PACE;
+  const pay = (base, now = T0) => {
+    const r = earnCoins(p, base, now);
+    p = r.profile;
+    return r.coins;
+  };
+  while (coinsToday(p, T0) < full.upTo) assert.equal(pay(10), 10);
+  assert.equal(pay(10), 5);
+  while (coinsToday(p, T0) < half.upTo) pay(10);
+  assert.equal(pay(15), 1);
+  assert.equal(pay(0), 0, 'a wrong answer still pays nothing');
+  while (coinsToday(p, T0) < DAILY_COIN_MAX) pay(15);
+  assert.equal(coinsToday(p, T0), DAILY_COIN_MAX);
+  assert.equal(pay(15), 0, 'the coin bag is full for today');
+  assert.ok(coinPace(p, T0).full);
+  assert.match(coinPaceNote(p, T0), /full/);
+  assert.equal(coinPaceNote(p, T0 + DAY), '');
+  const before = p.coins;
+  assert.equal(pay(15, T0 + DAY), 15);
+  assert.equal(p.coins, before + 15);
+});
+
+test('a long math binge is slowed: 30 minutes of speed rounds stays at or under the daily coin max', () => {
+  let p = newProfile('A', T0);
+  const rng = mulberry32(3);
+  const facts = allFacts('mul');
+  let now = T0;
+  // About 3 seconds per answer for 30 minutes, always right, cycling through every fact.
+  for (let i = 0; i < 600; i++) {
+    const f = facts[Math.floor(rng() * facts.length)];
+    p = recordFact(p, f.id, 'correct', { mode: 'speed', now }).profile;
+    now += 3000;
+  }
+  const answerCoins = coinsToday(p, now);
+  assert.ok(answerCoins <= DAILY_COIN_MAX, `earned ${answerCoins}`);
+  assert.ok(answerCoins >= COIN_PACE[1].upTo, 'a long session still earns a full day of coins');
 });
 
 test('cannot open a pack without enough coins', () => {
