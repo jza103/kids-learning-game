@@ -172,6 +172,7 @@ table.check td { vertical-align: top; }
 @media (max-width: 600px) {
   .entry { grid-template-columns: minmax(0, 1fr) auto; }
   .entry [name=sentence] { grid-column: 1 / -1; grid-row: 2; }
+}
 
 /* Times tables */
 .game-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -287,3 +288,48 @@ table.check td { vertical-align: top; }
 .collectible.gold { border-color: #e2b007; background: linear-gradient(160deg, #fff8db, var(--card) 60%); box-shadow: 0 0 14px rgba(226, 176, 7, .45); }
 .rarity.legendary { color: #b45309; text-shadow: 0 0 6px rgba(245, 165, 36, .6); }
 .collectible.legendary:not(.missing) { border-color: #b45309; background: linear-gradient(160deg, #fde68a, #fbcfe8 55%, #ddd6fe); }
+
+.float.float-msg { font-size: 1.2rem; width: min(90vw, 520px); text-align: center; background: var(--card); color: var(--ink); border: 2px solid var(--line); border-radius: 14px; padding: 12px 16px; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+
+/* Friend Grove (farm) */
+.farm-btn { background: linear-gradient(135deg, #e8f8e4, #fff6d6); }
+.farm-head { display: flex; gap: 16px; align-items: center; }
+.decor-row { font-size: 1.8rem; letter-spacing: 2px; max-width: 50%; text-align: right; }
+.farm-tabs { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 16px; padding-bottom: 4px; }
+.farm-tabs button { flex: 0 0 auto; min-height: 48px; padding: 10px 14px; }
+.farm-news { border-color: var(--good); display: grid; gap: 4px; }
+.farm-news button { justify-self: end; }
+.big-emoji { font-size: 2.4rem; line-height: 1; }
+.visitor { border-color: #f5a524; background: #fffaf0; }
+.visitor .big-emoji { font-size: 3.4rem; }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.bob { display: inline-block; animation: bob 1.8s ease-in-out infinite; }
+.plots { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); margin-bottom: 8px; }
+button.plot { min-height: 96px; font-size: 2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 8px; background: #8b5e3c; color: #fff; border: 3px solid #6f4a2f; }
+button.plot.empty { background: #c9a37c; border-style: dashed; }
+button.plot.ready { background: #6fbf4a; border-color: #4e9a2f; animation: bob 1.4s ease-in-out infinite; }
+.plot .small { font-size: .8rem; font-weight: 700; }
+.grow { width: 100%; height: 6px; background: rgba(255,255,255,.3); border-radius: 999px; overflow: hidden; }
+.grow > div { height: 100%; background: #b6f09c; }
+.picker { border: 2px dashed var(--line); border-radius: 14px; padding: 12px; margin: 8px 0; }
+.picker .row button { min-height: 60px; }
+.critters { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+.critter { text-align: center; background: #f2fbef; border-radius: 14px; padding: 8px; font-size: 2.2rem; }
+.critter .small { font-size: .8rem; }
+.recipes { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-bottom: 8px; }
+.recipe { display: flex; gap: 10px; align-items: center; text-align: left; }
+.crew-card { display: flex; gap: 10px; align-items: center; border-top: 1px solid var(--line); padding: 8px 0; }
+.trait { display: inline-block; font-size: .8rem; background: #eef6ff; border-radius: 999px; padding: 2px 8px; margin-top: 2px; }
+button.small-btn { min-height: 36px; padding: 6px 10px; font-size: .85rem; margin-top: 4px; }
+.pick-list { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.pick-friend { display: flex; gap: 10px; align-items: center; text-align: left; }
+button.pick-friend.selected { border-color: var(--good); }
+.request .big-emoji { font-size: 2.8rem; }
+.biome { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.biome.open { color: var(--good); }
+.decor { text-align: center; border: 2px solid var(--line); border-radius: 14px; padding: 8px; }
+.decor.owned { border-color: var(--good); }
+.journal { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+.jentry { text-align: center; padding: 6px; border-radius: 12px; background: #f7f5ff; }
+.jentry.unknown { opacity: .5; }
+td.nowrap { white-space: nowrap; }

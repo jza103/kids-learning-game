@@ -1,7 +1,7 @@
 # Kids Learning Game (working title)
 
 **Status:** spelling game and times tables game live on GitHub Pages
-**Created:** 2026-11-17  **Last updated:** 2026-11-20
+**Created:** 2026-11-17  **Last updated:** 2026-11-21
 
 _Moved from the `jza103/ideas` incubator repo on 2026-11-19._
 
@@ -56,6 +56,16 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - **Rewards:** only the first try at each word counts. It gets the same 0–5 stars as spelling (its own list, `profile.vocab`), pays 70% of the spelling coin table (`VOCAB_COIN_SCALE` in `src/vocab.js`), and mastering a word pays the usual mastery coins/XP and counts toward Super Packs. Team powers: 💡 hint takes away a wrong meaning; shield and power work as in spelling.
 - Code: `src/vocab.js` (logic, tested in `test/vocab.test.js`), `src/vocab-ui.js` (screens and grown-ups editor, plugged into `app.js`).
 
+## Friend Grove (farm side game)
+- **What:** a farm where every friend has a job. Open it from the hub (🌻). Friends work on 5 crews (Fields, Pens, Forage, Workshop, Build). Crops grow in real time, wild critters visit and move in when you give them their favorite crop, critters make goodies, and the workshop turns things into crafts. Friends ask for things on the request board, which pays **Grove Bells** (the farm's own money). Bells buy plots, pens, new lands and decorations.
+- **Every friend matters:** each friend has a job (Grower, Tender, Gatherer, Crafter, Builder) and an element (Sun, Water, Earth, Frost, Glow, Wind), worked out in `src/farm-content.js` so new monthly themes get them automatically. Working its own job counts double. Super/Best Friend, gold, ultra and legendary friends work harder, and rare-and-up friends have a once-a-day perk. Elements add +1 per harvest, double critter goodies, lower the crops a critter needs, and open new lands (a friend of the right element must be on the Build crew). Requests pay +25% when the friend who asked is on a crew. Crews start with 6 spots and grow to 25.
+- **Learning stays the money:** the farm never pays coins, packs or friends. Each mastered word, fact or vocab word gives a 🌟 Wonder Seed (no cap). Each Legendary friend and each finished theme gives a 🥚 Mystery Egg that hatches a rare critter.
+- **Shards:** spend them on crystal decorations (bells can't buy these) or crystal fertilizer (5 💎 finishes one crop). They never buy friends.
+- **No grind, no guilt:** nothing wilts and critters never leave. Growth while away stops after 8 hours. Farm XP is capped at 100 a day (150 per level), so lands open over weeks: Frost Ridge at level 3, Tide Pools at 6, Glow Caves at 10, Cloud Garden at 15. The Journal (crops, critters incl. 6 baby mixes and 4 egg critters, recipes, forage) gives a prize decoration per finished page.
+- **Siblings:** send up to 5 of one item to a brother or sister on the same device, once a day each.
+- **Parent setting:** "Only open Friend Grove after a learning game that day", per kid, off by default.
+- Code: `src/farm-content.js` (traits and content), `src/farm.js` (rules, tested in `test/farm.test.js`), `src/farmui.js` (screen).
+
 ## Hypothesis / what we're trying to prove
 - Kids will happily practice if the *game* is fun, without needing manipulative monetization.
 - Spaced repetition (adaptive scheduling of missed items) beats flat quizzes for spelling + math facts.
@@ -74,7 +84,9 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - **Randomized rewards: decided (2026-11-19)** after Jason tested Blooket with the kids: collectibles with rarity via packs, kept mild. Odds shown, pity guarantees, duplicates → shards, daily cap, kid picks a theme, collectibles give in-game powers and fill a collection book, coins only from correct answers (missed words pay more, mastered less), parent writes the content. Background in `appeal-analysis.md`.
 
 ## Where we left off
-- Last done (2026-11-20): school-year reward plan (monthly themes, gold versions, Legendaries), mastery refresh, and no waiting between math stars.
+- Last done (2026-11-21): Friend Grove farm side game (see above). Also fixed a missing `}` in `styles.css` that made the times tables, gold and Legendary styles show only on phone-sized screens.
+- Ideas not built yet: B-style expeditions from the farm, a monthly farm visitor tied to each new theme, friend outfits bought with bells.
+- Before that (2026-11-20): school-year reward plan (monthly themes, gold versions, Legendaries), mastery refresh, and no waiting between math stars.
 - Also (2026-11-20): built-in tricky words list (grades 5–6, 200 words, one set of 10 a week, early unlock at 3 stars) for Jason's 5th grader, who no longer gets school spelling words.
 - Before that (2026-11-20): facts with 0, 1 or 2 became warm-ups (no coins or mastery), after a tester ground the 0s table.
 - Before that (2026-11-20): daily coin pace (full to 300, half to 500, 1 each to 600, then full for the day) and rising pack prices (60, 60, 80, 100, 120), after a tester earned 1,000+ coins in 30 minutes.
@@ -97,6 +109,7 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - `index.html`, `styles.css`, `src/app.js` — the app UI
 - `src/srs.js`, `src/economy.js`, `src/progress.js`, `src/battle.js`, `src/profile.js` — game and learning logic (pure, tested in `test/`)
 - `src/math.js`, `src/mathgame.js` — times tables logic (tested in `test/math.test.js`) and UI
+- `src/farm.js`, `src/farm-content.js`, `src/farmui.js` — Friend Grove farm side game
 - `src/content.js` — collectibles (with specialty), monsters, cosmetics
 - `src/games.js`, `src/friends.js`, `src/friendsui.js` — game types, friend growth logic, shared friend UI snippets
 - `src/voices.js`, `src/speech.js`, `src/aivoice.js` — built-in voice ranking, speech playback, ElevenLabs audio

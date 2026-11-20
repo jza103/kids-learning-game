@@ -26,9 +26,10 @@ import { teamPowersFor, friendsAfterAnswer } from './friends.js';
 import { friendDetailsHtml, teamLineHtml, friendSummaryHtml, friendsHelpHtml } from './friendsui.js';
 import { GAME_TYPES, GAME_TYPE_IDS } from './games.js';
 import { initMath } from './mathgame.js';
+import { initFarm } from './farmui.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-20.4';
+const APP_VERSION = '2026-11-21.1';
 const app = document.getElementById('app');
 let data = load();
 // claimLegends also catches sets finished before Legendaries existed.
@@ -166,12 +167,16 @@ function superProgressHtml(p) {
     ${p.superPacks ? `<button class="super" data-action="go" data-to="packs">Open ${p.superPacks} Super Pack${p.superPacks > 1 ? 's' : ''}!</button>` : ''}</div>`;
 }
 
-function floatText(text) {
+function floatText(text, ms = 1000) {
   const el = document.createElement('div');
   el.className = 'float';
   el.textContent = text;
+  if (ms > 1000) {
+    el.style.animationDuration = `${ms}ms`;
+    el.classList.add('float-msg');
+  }
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 1000);
+  setTimeout(() => el.remove(), ms);
 }
 
 // ---------- screens ----------
@@ -220,6 +225,7 @@ const screens = {
         <button class="big" data-action="play" ${p.words.length ? '' : 'disabled'}>⚔️ Spelling</button>
         <button class="big secondary" data-action="go" data-to="math">🔢 Times tables</button>
         ${vocab.hubButton(p)}
+        ${farm.hubButton(p)}
       </div>
       ${legendNewsHtml(p)}
       <div class="card">${superProgressHtml(p)}</div>
@@ -479,6 +485,7 @@ const screens = {
         ${aiVoiceHtml()}
       </div>
       ${math.parentHtml(kid)}
+      ${farm.parentHtml(kid)}
       ${kid ? trickyParentHtml(kid) : ''}
       ${
         kid
@@ -1103,6 +1110,10 @@ Object.assign(actions, vocab.actions);
 const math = initMath({ ui, profile, update, go, render, esc, heroHtml, topbar, floatText, superProgressHtml, data: () => data });
 Object.assign(screens, math.screens);
 Object.assign(actions, math.actions);
+// Friend Grove farm side game (src/farmui.js).
+const farm = initFarm({ app, ui, profile, update, go, render, esc, floatText, data: () => data });
+Object.assign(screens, farm.screens);
+Object.assign(actions, farm.actions);
 
 app.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');
@@ -1153,6 +1164,7 @@ app.addEventListener('submit', (e) => {
 
 app.addEventListener('change', async (e) => {
   const kind = e.target.dataset.actionChange;
+  if (farm.onChange(kind, e, () => data.profiles[ui.parentKid])) return;
   if (kind === 'voice' || kind === 'rate') {
     if (kind === 'voice') data.settings.voiceURI = e.target.value || null;
     else data.settings.rate = Number(e.target.value);
@@ -1230,7 +1242,7 @@ const cancelHold = () => {
 
 // ---------- render ----------
 function render(opts = {}) {
-  if (['hub', 'play', 'summary', 'packs', 'book', 'locker', 'words', 'math', 'math-play', 'math-summary', 'math-facts', 'math-trial', 'math-trial-done', ...VOCAB_SCREENS].includes(ui.screen) && !profile()) ui.screen = 'home';
+  if (['hub', 'play', 'summary', 'packs', 'book', 'locker', 'words', 'math', 'math-play', 'math-summary', 'math-facts', 'math-trial', 'math-trial-done', 'farm', ...VOCAB_SCREENS].includes(ui.screen) && !profile()) ui.screen = 'home';
   if (ui.screen === 'play' && app.dataset.screen === 'play') {
     patchPlay(opts);
   } else {

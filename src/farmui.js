@@ -1,0 +1,473 @@
+// UI for Friend Grove (the farm). app.js passes in its helpers and merges
+// these screens and actions into its own. Game rules live in farm.js.
+import { ITEMS_BY_ID } from './content.js';
+import {
+  JOBS, ELEMENTS, farmTrait, BIOMES, CROPS, CRITTERS_BY_ID, GOODS_BY_ID, RECIPES, DECOR, JOURNAL_PAGES, WONDER_CROPS,
+} from './farm-content.js';
+import {
+  STATIONS, STATION_IDS, visitFarm, farmLevelProgress, xpLeftToday, slotsFor, stationOf, workPower, stationSpeed, stationPower,
+  crewElements, buildDiscount, assignCrew, removeCrew, openCrops, openRecipes, plant, plotReady, harvestAll, fertilize,
+  ownedCritters, penSpace, goodyCycles, collectGoodies, befriendCost, befriend, waveBye, hatchEgg, forageWaiting, collectForage,
+  startCraft, canCraft, collectCraft, fillRequest, skipRequest, requestPay, sell, plotCost, nextPenCost, buyPlot, buyPen,
+  biomeBlock, biomeCost, openBiome, decorCost, buyDecor, journalProgress, perkUsesLeft, usePerk, canGift, sendGift, farmLocked,
+  FERTILIZER_SHARDS, GIFT_MAX, FARM_XP_PER_DAY, OFFLINE_CAP,
+} from './farm.js';
+
+const TABS = [
+  ['farm', '🌻', 'Farm'],
+  ['crew', '🧑‍🌾', 'Crew'],
+  ['board', '📋', 'Requests'],
+  ['build', '🔨', 'Build'],
+  ['journal', '📔', 'Journal'],
+];
+
+export function initFarm(ctx) {
+  const { app, ui, profile, update, go, render, esc, floatText, data } = ctx;
+  ui.farm = { tab: 'farm', plantAt: null, pickFor: null, news: [], giftItem: null };
+
+  const g = (id) => GOODS_BY_ID[id];
+  const friend = (id) => ITEMS_BY_ID[id];
+  const critter = (id) => CRITTERS_BY_ID[id];
+  const farm = () => profile().farm;
+
+  function minutesLeft(at, now) {
+    const m = Math.max(1, Math.ceil((at - now) / 60e3));
+    return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+  }
+
+  const FRIENDLY = {
+    'not enough bells': 'Not enough Grove Bells yet. Fill requests or sell goods to earn more.',
+    'not enough shards': 'Not enough 💎 shards.',
+    'no pen space': 'Your pens are full. Build another pen first.',
+    'crew full': 'That crew is full. Take someone off first, or level up your farm for more spots.',
+    'put this friend on a crew first': 'Put this friend on a crew to use its perk.',
+  };
+  const friendly = (msg) => FRIENDLY[msg] || (msg.startsWith('need ') ? 'You need more of that. Check what it takes.' : msg.charAt(0).toUpperCase() + msg.slice(1) + '.');
+
+  function eventText(e) {
+    switch (e.type) {
+      case 'level': return `🎉 Farm level ${e.level}! More crew spots.`;
+      case 'seeds': return `🌟 ${e.n} Wonder Seed${e.n > 1 ? 's' : ''} for mastering! Plant ${e.n > 1 ? 'them' : 'it'} in a field.`;
+      case 'eggs': return `🥚 ${e.n} Mystery Egg${e.n > 1 ? 's' : ''} for finishing a set! Hatch ${e.n > 1 ? 'them' : 'it'} in the pens.`;
+      case 'visitor': return `${critter(e.id).emoji} A wild ${critter(e.id).name} is visiting!`;
+      case 'baby': return `💞 A baby ${critter(e.id).name} wandered over!`;
+      case 'befriend': return `${critter(e.id).emoji} ${critter(e.id).name} moved in!`;
+      case 'hatch': return `🐣 ${critter(e.id).name} hatched!`;
+      case 'stardust': return `🌟 +${e.n} Star Dust`;
+      case 'gift': return `🎁 ${e.from} sent you ${e.n} ${g(e.item).emoji} ${g(e.item).name}! +10 🔔`;
+      case 'stamp': return `📔 ${JOURNAL_PAGES[e.page].name} page complete! A new decoration is on your farm.`;
+      case 'found': return `🗺️ Found ${Object.entries(e.found).map(([id, n]) => `${n} ${g(id).emoji}`).join(' ')}`;
+      default: return '';
+    }
+  }
+
+  /** Catch the farm up, run an action, save, and show what happened. */
+  function act(fn) {
+    try {
+      const now = Date.now();
+      const v = visitFarm(profile(), now);
+      const r = fn(v.profile, now);
+      const next = r && r.profile ? r.profile : r || v.profile;
+      update(next);
+      const lines = [...v.events, ...((r && r.events) || [])].map(eventText).filter(Boolean);
+      if (lines.length) ui.farm.news = [...lines, ...ui.farm.news].slice(0, 4);
+      render();
+      return r;
+    } catch (err) {
+      floatText(friendly(err.message), 2500);
+      return null;
+    }
+  }
+
+  // ---------- pieces ----------
+  function header(p) {
+    const f = p.farm;
+    const lp = farmLevelProgress(f);
+    return `<div class="topbar">
+        <button class="secondary" data-action="go" data-to="hub">← Back</button>
+        <h2 style="margin:0">🌻 Friend Grove</h2>
+        <div class="row"><span class="pill">🔔 ${f.bells}</span><span class="pill">💎 ${p.shards}</span></div>
+      </div>
+      <div class="card farm-head">
+        <div style="flex:1">
+          <div class="small">Farm level ${lp.level} · ${lp.into}/${lp.needed} farm XP${xpLeftToday(f, Date.now()) ? '' : ' · <span class="muted">farm XP is done for today</span>'}</div>
+          <div class="xpbar"><div style="width:${(100 * lp.into) / lp.needed}%"></div></div>
+        </div>
+        ${f.decor.length ? `<div class="decor-row" title="Your decorations">${f.decor.map((id) => DECOR.find((d) => d.id === id)?.emoji).join('')}</div>` : ''}
+      </div>
+      <div class="farm-tabs">${TABS.map(([id, icon, label]) => `<button class="${ui.farm.tab === id ? '' : 'secondary'}" data-action="farm-tab" data-id="${id}">${icon} ${label}</button>`).join('')}</div>
+      ${ui.farm.news.length ? `<div class="card farm-news">${ui.farm.news.map((l) => `<div>${esc(l)}</div>`).join('')}<button class="ghost" data-action="farm-clear-news">OK</button></div>` : ''}`;
+  }
+
+  function traitBadge(id) {
+    const t = farmTrait(id);
+    if (!t) return '';
+    return `<span class="trait">${JOBS[t.job].emoji} ${JOBS[t.job].name} · ${ELEMENTS[t.element].emoji} ${ELEMENTS[t.element].name}</span>`;
+  }
+
+  function crewLine(p, station) {
+    const crew = p.farm.crew[station];
+    const els = [...crewElements(p.farm, station)].map((e) => ELEMENTS[e].emoji).join('');
+    return `<div class="small muted">${STATIONS[station].emoji} Crew: ${crew.map((id) => friend(id).emoji).join(' ') || 'nobody yet'}${els ? ` · elements ${els}` : ''} · speed ×${stationSpeed(p, station).toFixed(2)}
+      <button class="ghost" data-action="farm-pick" data-id="${station}">Change</button></div>`;
+  }
+
+  // ---------- Farm tab ----------
+  function visitorHtml(p, now) {
+    const f = p.farm;
+    if (!f.visitor) return '';
+    const c = critter(f.visitor.id);
+    const cost = befriendCost(f);
+    const have = cost ? f.items[c.likes] || 0 : 0;
+    const full = penSpace(f) <= 0;
+    return `<div class="card visitor">
+      <div class="row"><span class="big-emoji bob">${c.emoji}</span>
+        <div style="flex:1"><h3>${f.visitor.baby ? `A baby ${esc(c.name)}!` : `A wild ${esc(c.name)} is visiting!`}</h3>
+          <div class="small">${ELEMENTS[c.element].emoji} ${ELEMENTS[c.element].name} critter · makes ${c.makes.map((m) => `${g(m).emoji} ${g(m).name}`).join(' and ')}</div>
+          ${cost ? `<div class="small">It would love <strong>${cost} ${g(c.likes).emoji} ${g(c.likes).name}</strong> (you have ${have}).${cost === 3 ? ` ${/^[AEIOU]/.test(ELEMENTS[c.element].name) ? 'An' : 'A'} ${ELEMENTS[c.element].name} friend on the Pens crew makes it 2.` : ''}</div>` : '<div class="small">Babies move in for free.</div>'}
+          ${full ? '<div class="small muted">Your pens are full. Build a pen to make room.</div>' : ''}
+        </div></div>
+      <div class="row" style="margin-top:8px">
+        <button data-action="farm-befriend" ${have >= cost && !full ? '' : 'disabled'}>${cost ? `Give ${cost} ${g(c.likes).emoji}` : 'Welcome home'}</button>
+        <button class="ghost" data-action="farm-bye">Wave bye</button>
+      </div></div>`;
+  }
+
+  function fieldsHtml(p, now) {
+    const f = p.farm;
+    const ready = f.plots.some((pl) => plotReady(pl, now));
+    const plots = f.plots.map((pl, i) => {
+      if (!pl) return `<button class="plot empty" data-action="farm-plot" data-i="${i}">➕<div class="small">Plant</div></button>`;
+      const c = g(pl.crop);
+      if (plotReady(pl, now)) return `<button class="plot ready" data-action="farm-harvest">${c.emoji}<div class="small">Ready!</div></button>`;
+      const pct = Math.min(100, (100 * (now - pl.plantedAt)) / (pl.readyAt - pl.plantedAt));
+      return `<button class="plot growing" data-action="farm-plot" data-i="${i}">🌱<div class="small">${c.emoji} ${minutesLeft(pl.readyAt, now)}</div><div class="grow"><div style="width:${pct}%"></div></div></button>`;
+    }).join('');
+    let picker = '';
+    if (ui.farm.plantAt != null) {
+      const pl = f.plots[ui.farm.plantAt];
+      if (!pl) {
+        const els = crewElements(f, 'fields');
+        picker = `<div class="picker"><h3>Plant what?</h3><div class="row">
+          ${f.wonderSeeds ? `<button class="super" data-action="farm-plant" data-id="wonder">🌟 Wonder Seed (${f.wonderSeeds})</button>` : ''}
+          ${openCrops(f).map((c) => `<button class="secondary" data-action="farm-plant" data-id="${c.id}">${c.emoji} ${c.name}<div class="small muted">${c.minutes}m · ${ELEMENTS[c.element].emoji}${els.has(c.element) ? ' +1' : ''}</div></button>`).join('')}
+        </div><button class="ghost" data-action="farm-plot" data-i="-1">Cancel</button></div>`;
+      } else if (!plotReady(pl, now)) {
+        picker = `<div class="picker"><p>${g(pl.crop).emoji} ${g(pl.crop).name} is ready in ${minutesLeft(pl.readyAt, now)}.</p>
+          <div class="row"><button class="secondary" data-action="farm-fertilize" ${p.shards >= FERTILIZER_SHARDS ? '' : 'disabled'}>💎 Crystal fertilizer: ready now (${FERTILIZER_SHARDS} shards)</button>
+          <button class="ghost" data-action="farm-plot" data-i="-1">Close</button></div></div>`;
+      }
+    }
+    return `<div class="card"><div class="row spread"><h3>🌱 Fields</h3>${ready ? '<button data-action="farm-harvest">Harvest all</button>' : ''}</div>
+      <div class="plots">${plots}</div>${picker}
+      ${crewLine(p, 'fields')}
+      <p class="small muted">A friend with the crop's element on the Fields crew adds +1 to each harvest. Growers make crops grow faster.</p></div>`;
+  }
+
+  function pensHtml(p, now) {
+    const f = p.farm;
+    const owned = ownedCritters(f);
+    const waiting = owned.reduce((s, id) => s + goodyCycles(p, id, now) * critter(id).makes.length, 0);
+    return `<div class="card"><div class="row spread"><h3>🐾 Pens (${owned.length}/${f.pens})</h3>${waiting ? `<button data-action="farm-goodies">Collect goodies (${waiting}+)</button>` : ''}</div>
+      ${owned.length ? `<div class="critters">${owned.map((id) => {
+        const c = critter(id);
+        const n = goodyCycles(p, id, now);
+        return `<div class="critter"><span class="bob">${c.emoji}</span><div class="small">${esc(c.name)}</div><div class="small muted">${n ? c.makes.map((m) => g(m).emoji).join('') + ' ×' + n : '…'}</div></div>`;
+      }).join('')}</div>` : '<p class="muted">No critters yet. Befriend a visitor with its favorite crop!</p>'}
+      ${f.eggs ? `<div class="row" style="margin-top:8px"><button class="super" data-action="farm-hatch">🥚 Hatch a Mystery Egg (${f.eggs})</button></div>` : ''}
+      ${crewLine(p, 'pens')}
+      <p class="small muted">Critters make goodies every 2 hours (up to 8 hours' worth while you're away). A Tender with the critter's element doubles it. Two critters that get along sometimes have a baby.</p></div>`;
+  }
+
+  function forageHtml(p, now) {
+    const n = forageWaiting(p, now);
+    const power = stationPower(p, 'forage');
+    return `<div class="card"><div class="row spread"><h3>🧺 Forage</h3>${n ? `<button data-action="farm-forage">Pick up ${n} find${n > 1 ? 's' : ''}</button>` : ''}</div>
+      <p class="small">${power ? `Your gatherers find about ${(power * 0.5).toFixed(1)} things an hour.` : 'Put friends on the Forage crew to find acorns, shells, crystals and more.'}</p>
+      ${crewLine(p, 'forage')}</div>`;
+  }
+
+  function workshopHtml(p, now) {
+    const f = p.farm;
+    const w = f.workshop;
+    let body;
+    if (w && now >= w.readyAt) body = `<button data-action="farm-craft-done">${g(w.recipe).emoji} Collect ${esc(g(w.recipe).name)}</button>`;
+    else if (w) body = `<p>Making ${g(w.recipe).emoji} ${esc(g(w.recipe).name)}: ready in ${minutesLeft(w.readyAt, now)}.</p>`;
+    else body = `<div class="recipes">${openRecipes(f).map((r) => `<button class="secondary recipe" data-action="farm-craft" data-id="${r.id}" ${canCraft(f, r) ? '' : 'disabled'}>
+        <span class="big-emoji">${r.emoji}</span><div><strong>${esc(r.name)}</strong><div class="small">${Object.entries(r.needs).map(([id, n]) => `${n}${g(id).emoji}`).join(' ')} · ${r.minutes}m · 🔔${r.value}</div></div></button>`).join('')}</div>`;
+    return `<div class="card"><h3>🔨 Workshop</h3>${body}${crewLine(p, 'workshop')}</div>`;
+  }
+
+  function farmTab(p, now) {
+    const f = p.farm;
+    const crewTotal = STATION_IDS.reduce((s, st) => s + f.crew[st].length, 0);
+    return `${crewTotal ? '' : `<div class="card"><strong>Welcome to Friend Grove!</strong> Your friends can work here. Tap <button class="ghost" data-action="farm-tab" data-id="crew">🧑‍🌾 Crew</button> to give them jobs, then plant some carrots.</div>`}
+      ${visitorHtml(p, now)}${fieldsHtml(p, now)}${pensHtml(p, now)}${forageHtml(p, now)}${workshopHtml(p, now)}`;
+  }
+
+  // ---------- Crew tab ----------
+  function crewTab(p, now) {
+    const f = p.farm;
+    const stations = STATION_IDS.map((st) => {
+      const s = STATIONS[st];
+      const slots = slotsFor(f, st);
+      const members = f.crew[st].map((id) => {
+        const left = perkUsesLeft(p, id, now);
+        const t = farmTrait(id);
+        return `<div class="crew-card"><span class="big-emoji">${friend(id).emoji}</span><div style="flex:1"><strong>${esc(friend(id).name)}</strong> <span class="small">+${workPower(p, id, st)}</span><div>${traitBadge(id)}</div>
+          ${t.perk ? `<button class="small-btn" data-action="farm-perk" data-id="${id}" ${left ? '' : 'disabled'}>${t.perk.emoji} ${t.perk.name}${left ? ` (${left})` : ' (tomorrow)'}</button>` : ''}</div>
+          <button class="ghost" data-action="farm-unassign" data-id="${id}" aria-label="Take off crew">✕</button></div>`;
+      }).join('');
+      const empty = Math.max(0, slots - f.crew[st].length);
+      return `<div class="card"><div class="row spread"><h3>${s.emoji} ${s.name} (${f.crew[st].length}/${slots})</h3><span class="small muted">Best job: ${JOBS[s.job].emoji} ${JOBS[s.job].name}</span></div>
+        ${members}${empty ? `<button class="secondary" data-action="farm-pick" data-id="${st}">➕ Add a friend</button>` : ''}
+        ${st === 'build' ? `<p class="small muted">Builders take ${Math.round(buildDiscount(p) * 100)}% off building. New lands need a friend of the right element on this crew.</p>` : ''}</div>`;
+    }).join('');
+    return `<div class="card small"><p>Every friend has a <strong>job</strong> and an <strong>element</strong>. A friend working its own job counts double, Super and Best Friends and gold friends work harder, and rare-and-up friends have a once-a-day perk. Leveling the farm opens more spots.</p></div>
+      ${pickerHtml(p)}${stations}`;
+  }
+
+  function pickerHtml(p) {
+    const st = ui.farm.pickFor;
+    if (!st) return '';
+    const f = p.farm;
+    const owned = Object.keys(p.collection).filter((id) => friend(id) && farmTrait(id));
+    owned.sort((a, b) => workPower(p, b, st) - workPower(p, a, st) || friend(a).name.localeCompare(friend(b).name));
+    return `<div class="card picker"><div class="row spread"><h3>Who works the ${STATIONS[st].name}?</h3><button class="ghost" data-action="farm-pick" data-id="">Close</button></div>
+      ${owned.length ? `<div class="pick-list">${owned.map((id) => {
+        const at = stationOf(f, id);
+        return `<button class="secondary pick-friend ${at === st ? 'selected' : ''}" data-action="farm-assign" data-id="${id}">
+          <span class="big-emoji">${friend(id).emoji}</span><div><strong>${esc(friend(id).name)}</strong> +${workPower(p, id, st)}<div>${traitBadge(id)}</div>
+          ${at && at !== st ? `<div class="small muted">now on ${STATIONS[at].name}</div>` : ''}</div></button>`;
+      }).join('')}</div>` : '<p class="muted">Get friends from packs by learning, then they can work here.</p>'}</div>`;
+  }
+
+  // ---------- Requests tab ----------
+  function boardTab(p, now) {
+    const f = p.farm;
+    const reqs = f.requests.map((r, i) => {
+      if (!r) return `<div class="card muted small">📋 A new request will show up in ${minutesLeft(f.requestAt[i], now)}.</div>`;
+      const who = r.from ? friend(r.from) : null;
+      const ok = Object.entries(r.wants).every(([id, n]) => (f.items[id] || 0) >= n);
+      const pay = requestPay(p, r);
+      return `<div class="card request"><div class="row"><span class="big-emoji">${who ? who.emoji : '🧑‍🌾'}</span>
+        <div style="flex:1"><strong>${who ? esc(who.name) : 'A neighbor'}</strong> would love:
+          <div style="font-size:1.3rem">${Object.entries(r.wants).map(([id, n]) => `${n} ${g(id).emoji} <span class="small">${esc(g(id).name)} (${f.items[id] || 0})</span>`).join(' · ')}</div>
+          <div class="small">Pays 🔔 ${pay}${pay > r.bells ? ' (bonus: they\'re on your crew!)' : who ? ` (+25% if ${esc(who.name)} is on a crew)` : ''}</div></div></div>
+        <div class="row"><button data-action="farm-fill" data-i="${i}" ${ok ? '' : 'disabled'}>Give</button><button class="ghost" data-action="farm-skip" data-i="${i}">Skip</button></div></div>`;
+    }).join('');
+    const items = Object.entries(f.items).filter(([, n]) => n > 0);
+    const kids = data().order.map((id) => data().profiles[id]).filter((k) => k && k.id !== p.id);
+    const giftItem = items.find(([id]) => id === ui.farm.giftItem)?.[0] || items[0]?.[0];
+    return `${reqs}
+      <div class="card"><h3>🏠 Barn</h3>
+        ${items.length ? `<table>${items.map(([id, n]) => `<tr><td>${g(id).emoji} ${esc(g(id).name)}</td><td>${n}</td><td class="small muted">🔔${g(id).value} each</td>
+          <td class="nowrap"><button class="small-btn secondary" data-action="farm-sell" data-id="${id}" data-n="1">Sell 1</button>${n > 1 ? `<button class="small-btn secondary" data-action="farm-sell" data-id="${id}" data-n="${n}">Sell all</button>` : ''}</td></tr>`).join('')}</table>`
+          : '<p class="muted">Empty. Harvest, collect and forage to fill it.</p>'}
+        <p class="small muted">Requests pay more than selling.</p></div>
+      ${kids.length && items.length ? `<div class="card"><h3>🎁 Send a gift</h3><p class="small muted">Send up to ${GIFT_MAX} of something to a brother or sister on this iPad, once a day each. They get a little bonus too.</p>
+        <div class="row"><select data-action-change="farm-gift-item" aria-label="Gift">${items.map(([id, n]) => `<option value="${id}" ${id === giftItem ? 'selected' : ''}>${g(id).emoji} ${esc(g(id).name)} (${n})</option>`).join('')}</select>
+        ${kids.map((k) => `<button class="secondary" data-action="farm-gift" data-id="${k.id}" ${canGift(p, k.id, now) ? '' : 'disabled'}>To ${esc(k.name)}${canGift(p, k.id, now) ? '' : ' ✓'}</button>`).join('')}</div></div>` : ''}`;
+  }
+
+  // ---------- Build tab ----------
+  function buildTab(p, now) {
+    const f = p.farm;
+    const pc = plotCost(p);
+    const pen = nextPenCost(p);
+    const disc = buildDiscount(p);
+    const blockText = { level: (b) => `Farm level ${b.level}`, element: (b) => `Needs a ${b.elements.map((e) => ELEMENTS[e].emoji + ' ' + ELEMENTS[e].name).join(' or ')} friend on the Build crew`, bells: (b) => `🔔 ${biomeCost(p, b.id)}` };
+    return `${disc ? `<div class="card small">🪚 Your builders take <strong>${Math.round(disc * 100)}%</strong> off.${f.halfOff ? ' (Barn Raising: next build is half price!)' : ''}</div>` : ''}
+      <div class="card"><h3>Grow your farm</h3><div class="row">
+        <button data-action="farm-buy-plot" ${pc != null && f.bells >= pc ? '' : 'disabled'}>➕ Field plot ${pc != null ? `🔔 ${pc}` : '(all built)'}</button>
+        <button data-action="farm-buy-pen" ${pen != null && f.bells >= pen ? '' : 'disabled'}>➕ Pen ${pen != null ? `🔔 ${pen}` : '(all built)'}</button>
+      </div><p class="small muted">${f.plots.length} plots · ${f.pens} pens</p></div>
+      <div class="card"><h3>New lands</h3>${BIOMES.map((b) => {
+        const block = biomeBlock(p, b.id);
+        if (block === 'open') return `<div class="biome open">${b.emoji} <strong>${b.name}</strong> ✓</div>`;
+        return `<div class="biome"><div>${b.emoji} <strong>${b.name}</strong><div class="small muted">New crops, critters, forage and recipes. ${block && block !== 'bells' ? esc(blockText[block](b)) : ''}</div></div>
+          <button data-action="farm-biome" data-id="${b.id}" ${block ? 'disabled' : ''}>Open · 🔔 ${biomeCost(p, b.id)}</button></div>`;
+      }).join('')}</div>
+      <div class="card"><h3>Decorations</h3><div class="grid">${DECOR.filter((d) => !d.stamp).map((d) => {
+        const own = f.decor.includes(d.id);
+        const cost = decorCost(p, d.id);
+        const can = d.shards ? p.shards >= cost : f.bells >= cost;
+        return `<div class="decor ${own ? 'owned' : ''}"><div class="big-emoji">${d.emoji}</div><div class="small">${esc(d.name)}</div>
+          ${own ? '<div class="small">✓ On your farm</div>' : `<button class="small-btn" data-action="farm-decor" data-id="${d.id}" ${can ? '' : 'disabled'}>${d.shards ? `💎 ${cost}` : `🔔 ${cost}`}</button>`}</div>`;
+      }).join('')}</div>
+      <p class="small muted">Crystal decorations cost 💎 shards from duplicate friends. Journal prizes can't be bought: finish a Journal page to get them.</p></div>`;
+  }
+
+  // ---------- Journal tab ----------
+  function journalTab(p) {
+    const f = p.farm;
+    return Object.entries(JOURNAL_PAGES).map(([page, info]) => {
+      const pr = journalProgress(f, page);
+      const prize = DECOR.find((d) => d.stamp === page);
+      return `<div class="card"><div class="row spread"><h3>${info.emoji} ${info.name}</h3><span class="pill">${pr.found}/${pr.total}${pr.complete ? ' · 📔 stamped' : ''}</span></div>
+        <div class="journal">${info.entries.map((e) => {
+          const got = f.journal[page].includes(e.id);
+          return `<div class="jentry ${got ? '' : 'unknown'}" title="${got ? esc(e.name) : '???'}"><div class="big-emoji">${got ? e.emoji : '❓'}</div><div class="small">${got ? esc(e.name) : '???'}</div></div>`;
+        }).join('')}</div>
+        <p class="small muted">Prize: ${prize.emoji} ${esc(prize.name)}${page === 'crops' ? '. Wonder crops grow from Wonder Seeds, earned by mastering words and facts.' : page === 'critters' ? '. Some critters are babies of two others, and some hatch from Mystery Eggs (finish a set or earn a Legendary).' : ''}</p></div>`;
+    }).join('');
+  }
+
+  // ---------- screen ----------
+  const screens = {
+    farm() {
+      const p = profile();
+      const now = Date.now();
+      if (!p.farm) return `${header({ ...p, farm: visitFarm(p, now).profile.farm })}`;
+      const tab = { farm: farmTab, crew: crewTab, board: boardTab, build: buildTab, journal: journalTab }[ui.farm.tab] || farmTab;
+      return `${header(p)}${tab(p, now)}`;
+    },
+  };
+
+  const num = (v) => Number(v);
+  const actions = {
+    'farm-open': () => {
+      const p = profile();
+      if (farmLocked(p, Date.now())) return floatText('🌻 Friend Grove opens after a learning round today. Play a game first!', 2500);
+      ui.farm = { ...ui.farm, tab: 'farm', plantAt: null, pickFor: null, news: [] };
+      const v = visitFarm(p, Date.now());
+      update(v.profile);
+      ui.farm.news = v.events.map(eventText).filter(Boolean).slice(0, 4);
+      go('farm');
+    },
+    'farm-tab': (d) => {
+      ui.farm.tab = d.id;
+      ui.farm.pickFor = null;
+      ui.farm.plantAt = null;
+      render();
+      window.scrollTo(0, 0);
+    },
+    'farm-clear-news': () => {
+      ui.farm.news = [];
+      render();
+    },
+    'farm-plot': (d) => {
+      ui.farm.plantAt = num(d.i) >= 0 ? num(d.i) : null;
+      render();
+    },
+    'farm-plant': (d) => {
+      const i = ui.farm.plantAt;
+      ui.farm.plantAt = null;
+      act((p, now) => plant(p, i, d.id, now));
+    },
+    'farm-harvest': () => {
+      const r = act((p, now) => harvestAll(p, now));
+      if (r?.harvested?.length) floatText(`+ ${r.harvested.map((h) => `${h.n} ${g(h.id).emoji}`).join(' ')}`);
+    },
+    'farm-fertilize': () => {
+      const i = ui.farm.plantAt;
+      ui.farm.plantAt = null;
+      act((p, now) => fertilize(p, i, now));
+    },
+    'farm-befriend': () => act((p, now) => befriend(p, now)),
+    'farm-bye': () => act((p, now) => waveBye(p, now)),
+    'farm-hatch': () => act((p, now) => hatchEgg(p, now)),
+    'farm-goodies': () => {
+      const r = act((p, now) => collectGoodies(p, now));
+      if (r?.collected) floatText(`+ ${Object.entries(r.collected).map(([id, n]) => `${n} ${g(id).emoji}`).join(' ')}`);
+    },
+    'farm-forage': () => {
+      const r = act((p, now) => collectForage(p, now));
+      if (r?.found) floatText(`+ ${Object.entries(r.found).map(([id, n]) => `${n} ${g(id).emoji}`).join(' ')}`);
+    },
+    'farm-craft': (d) => act((p, now) => startCraft(p, d.id, now)),
+    'farm-craft-done': () => {
+      const r = act((p, now) => collectCraft(p, now));
+      if (r?.id) floatText(`${g(r.id).emoji} ${g(r.id).name}!`);
+    },
+    'farm-pick': (d) => {
+      ui.farm.pickFor = d.id || null;
+      if (d.id && ui.farm.tab !== 'crew') ui.farm.tab = 'crew';
+      render();
+      if (d.id) window.scrollTo(0, 0);
+    },
+    'farm-assign': (d) => {
+      const st = ui.farm.pickFor;
+      const r = act((p) => (stationOf(p.farm, d.id) === st ? removeCrew(p, d.id) : assignCrew(p, d.id, st)));
+      if (r && profile().farm.crew[st].length >= slotsFor(profile().farm, st)) {
+        ui.farm.pickFor = null;
+        render();
+      }
+    },
+    'farm-unassign': (d) => act((p) => removeCrew(p, d.id)),
+    'farm-perk': (d) => act((p, now) => usePerk(p, d.id, now)),
+    'farm-fill': (d) => {
+      const r = act((p, now) => fillRequest(p, num(d.i), now));
+      if (r?.bells) floatText(`🔔 +${r.bells}`);
+    },
+    'farm-skip': (d) => act((p, now) => skipRequest(p, num(d.i), now)),
+    'farm-sell': (d) => {
+      const r = act((p) => sell(p, d.id, num(d.n)));
+      if (r?.bells) floatText(`🔔 +${r.bells}`);
+    },
+    'farm-gift': (d) => {
+      const other = data().profiles[d.id];
+      const p0 = profile();
+      const item = ui.farm.giftItem && p0.farm.items[ui.farm.giftItem] ? ui.farm.giftItem : Object.keys(p0.farm.items).find((id) => p0.farm.items[id] > 0);
+      if (!other || !item) return;
+      try {
+        const r = sendGift(p0, other, item, GIFT_MAX, Date.now());
+        update(r.receiver);
+        update(r.sender);
+        floatText(`🎁 Sent to ${other.name}!`);
+        render();
+      } catch (err) {
+        floatText(friendly(err.message), 2500);
+      }
+    },
+    'farm-buy-plot': () => act((p) => buyPlot(p)),
+    'farm-buy-pen': () => act((p) => buyPen(p)),
+    'farm-biome': (d) => {
+      const r = act((p, now) => openBiome(p, d.id, now));
+      if (r) floatText(`${BIOMES.find((b) => b.id === d.id).emoji} ${BIOMES.find((b) => b.id === d.id).name} is open!`);
+    },
+    'farm-decor': (d) => act((p) => buyDecor(p, d.id)),
+  };
+
+  /** Handle the farm's change events; returns true if it was one. */
+  function onChange(kind, e, parentKid) {
+    if (kind === 'farm-gift-item') {
+      ui.farm.giftItem = e.target.value;
+      return true;
+    }
+    if (kind === 'farm-gate') {
+      const kid = parentKid();
+      if (kid) update({ ...kid, farmGate: e.target.checked });
+      return true;
+    }
+    return false;
+  }
+
+  function hubButton(p) {
+    const locked = farmLocked(p, Date.now());
+    return `<button class="big secondary farm-btn" data-action="farm-open">🌻 Friend Grove${locked ? '<div class="small muted">Opens after a learning round today</div>' : ''}</button>`;
+  }
+
+  function parentHtml(kid) {
+    if (!kid) return '';
+    return `<div class="card">
+      <h3>🌻 Friend Grove</h3>
+      <p class="small muted">A farm side game where friends work, crops grow and critters move in. It pays its own Grove Bells and never coins, packs or friends, so learning stays the way to get new friends. Mastering words and facts gives Wonder Seeds; finishing sets gives Mystery Eggs. Growth stops piling up after ${OFFLINE_CAP / 3600e3} hours away, nothing ever wilts, and farm XP is capped at ${FARM_XP_PER_DAY} a day so new lands open over weeks.</p>
+      <label class="row"><input type="checkbox" data-action-change="farm-gate" ${kid.farmGate ? 'checked' : ''}> Only open Friend Grove after ${esc(kid.name)} plays a learning game that day</label>
+    </div>`;
+  }
+
+  // Keep timers fresh while the farm is open.
+  setInterval(() => {
+    if (ui.screen === 'farm' && document.visibilityState === 'visible' && !ui.farm.pickFor && ui.farm.plantAt == null) {
+      const y = window.scrollY;
+      render();
+      window.scrollTo(0, y);
+    }
+  }, 30e3);
+
+  return { screens, actions, onChange, hubButton, parentHtml };
+}
+
+// Re-exported for the parent help text.
+export { CROPS, RECIPES, WONDER_CROPS };
