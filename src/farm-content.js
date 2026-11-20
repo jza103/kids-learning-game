@@ -136,14 +136,6 @@ export const GOODIES = [
   goody('stardust', 'Star Dust', '🌟', 45),
 ];
 
-// Treasures: only found on expeditions (and made by explorer critters).
-const treasure = (id, name, emoji, region, value) => ({ id, name, emoji, kind: 'treasure', region, value });
-export const TREASURES = [
-  treasure('clover', 'Four-Leaf Clover', '🍀', 'woods', 18),
-  treasure('coral', 'Rainbow Coral', '🪸', 'coast', 24),
-  treasure('storm', 'Storm Crystal', '⚡', 'peaks', 30),
-  treasure('fallenstar', 'Fallen Star', '🌠', 'isle', 40),
-];
 
 // kind: 'wild' (visits, befriend with `likes`), 'baby' (a mix of two critters
 // in your pens), 'egg' (hatches from a Mystery Egg, earned by mastering sets).
@@ -176,15 +168,8 @@ const EGGS = [
   egg('puffwhale', 'Puffwhale', '🐋', 'water'),
   egg('jewelbug', 'Jewelbug', '🐞', 'earth'),
 ];
-// Explorer critters: only found on big expeditions in their region.
-const explorer = (id, name, emoji, element, region, makes) => ({ id, name, emoji, element, region, makes: [makes], kind: 'explorer' });
-const EXPLORERS = [
-  explorer('mossling', 'Mossling', '🦥', 'earth', 'woods', 'clover'),
-  explorer('reefpup', 'Reef Pup', '🦭', 'water', 'coast', 'coral'),
-  explorer('boltbird', 'Bolt Bird', '🦅', 'wind', 'peaks', 'storm'),
-  explorer('starfox', 'Comet Kit', '🐈', 'glow', 'isle', 'fallenstar'),
-];
-CRITTERS.push(...BABIES, ...EGGS, ...EXPLORERS);
+// Explorer critters (one per land) are defined with the routes below.
+CRITTERS.push(...BABIES, ...EGGS);
 export const CRITTERS_BY_ID = Object.fromEntries(CRITTERS.map((c) => [c.id, c]));
 // Babies make both parents' goodies, and take the first parent's element and biome.
 for (const b of BABIES) {
@@ -210,7 +195,7 @@ export const RECIPES = [
   craft('musicbox', 'Music Box', '🎶', 'cloud', { note: 2, pearl: 1, coconut: 1 }, 12, 140),
 ];
 
-export const GOODS = [...CROPS, ...WONDER_CROPS, ...FORAGE, ...GOODIES, ...TREASURES, ...RECIPES];
+export const GOODS = [...CROPS, ...WONDER_CROPS, ...FORAGE, ...GOODIES, ...RECIPES]; // + expedition treasures, below
 export const GOODS_BY_ID = Object.fromEntries(GOODS.map((g) => [g.id, g]));
 
 // ---------- Decorations ----------
@@ -250,30 +235,46 @@ export const JOURNAL_PAGES = {
 };
 
 // ---------- Expeditions ----------
-// Regions open as you collect map pieces. Each route is a trip for 3 (short)
-// or 6 (big) friends; finishing it the first time gives its souvenir.
-export const REGIONS = [
-  { id: 'woods', name: 'Whisper Woods', emoji: '🌲', pieces: 0 },
-  { id: 'coast', name: 'Crystal Coast', emoji: '🏝️', pieces: 5 },
-  { id: 'peaks', name: 'Thunder Peaks', emoji: '⛰️', pieces: 12 },
-  { id: 'isle', name: 'Starfall Isle', emoji: '🌠', pieces: 20 },
-];
-export const REGIONS_BY_ID = Object.fromEntries(REGIONS.map((r) => [r.id, r]));
-const route = (id, name, emoji, region, size, souvenir, souvenirEmoji) => ({ id, name, emoji, region, size, souvenir: { id: `souv-${id}`, name: souvenir, emoji: souvenirEmoji } });
+// Every land (biome) has its own 3 routes: two short trips (3 friends) and a
+// big trip (6 friends). Each route has its own treasure and souvenir, and each
+// land's big trip is the only place to find that land's explorer critter, so
+// collecting everything takes opening every land and running every route.
+const route = (id, name, emoji, land, size, [tid, tname, temoji, tvalue], [sname, semoji]) => ({
+  id, name, emoji, land, size,
+  treasure: { id: tid, name: tname, emoji: temoji, kind: 'treasure', land, route: id, value: tvalue },
+  souvenir: { id: `souv-${id}`, name: sname, emoji: semoji },
+});
 export const ROUTES = [
-  route('hollow', 'Mushroom Hollow', '🍄', 'woods', 'short', 'Spotted Cap', '🧢'),
-  route('creek', 'Babbling Creek', '🏞️', 'woods', 'short', 'Smooth Pebble', '🪨'),
-  route('oldoak', 'The Old Oak', '🌳', 'woods', 'big', 'Golden Acorn', '🌰'),
-  route('tidepath', 'Tide Path', '🦀', 'coast', 'short', 'Message Bottle', '🍾'),
-  route('lighthouse', 'Lighthouse Point', '🗼', 'coast', 'short', 'Tiny Lantern', '🏮'),
-  route('wreck', 'Sunken Ship', '🚢', 'coast', 'big', 'Pirate Coin', '🪙'),
-  route('pass', 'Windy Pass', '🌬️', 'peaks', 'short', 'Eagle Feather', '🪶'),
-  route('cave', 'Echo Cave', '🦇', 'peaks', 'short', 'Echo Shell', '🐚'),
-  route('summit', 'Thunder Summit', '🏔️', 'peaks', 'big', 'Summit Flag', '🚩'),
-  route('meteor', 'Meteor Field', '☄️', 'isle', 'short', 'Space Rock', '🌑'),
-  route('lagoon', 'Glow Lagoon', '🌊', 'isle', 'short', 'Glow Pearl', '🔮'),
-  route('observatory', 'Star Observatory', '🔭', 'isle', 'big', 'Star Map', '🗺️'),
+  route('hollow', 'Mushroom Hollow', '🍄', 'meadow', 'short', ['clover', 'Four-Leaf Clover', '🍀', 18], ['Spotted Cap', '🧢']),
+  route('creek', 'Babbling Creek', '🏞️', 'meadow', 'short', ['pebble', 'Wishing Pebble', '🪨', 18], ['Toy Boat', '⛵']),
+  route('oldoak', 'The Old Oak', '🌳', 'meadow', 'big', ['goldacorn', 'Golden Acorn', '🌰', 30], ['Owl Feather', '🪶']),
+  route('pass', 'Windy Pass', '🌬️', 'frost', 'short', ['frostbloom', 'Frost Flower', '💮', 22], ['Snow Globe', '🔮']),
+  route('icecave', 'Ice Cave', '🧊', 'frost', 'short', ['bluegem', 'Ice Gem', '💎', 24], ['Ice Skate', '⛸️']),
+  route('summit', 'Thunder Summit', '🏔️', 'frost', 'big', ['storm', 'Storm Crystal', '⚡', 34], ['Summit Flag', '🚩']),
+  route('tidepath', 'Tide Path', '🦀', 'tide', 'short', ['coral', 'Rainbow Coral', '🪸', 24], ['Message Bottle', '🍾']),
+  route('lighthouse', 'Lighthouse Point', '🗼', 'tide', 'short', ['seaglass', 'Sea Glass', '🫙', 24], ['Tiny Lantern', '🏮']),
+  route('wreck', 'Sunken Ship', '🚢', 'tide', 'big', ['doubloon', 'Pirate Coin', '🪙', 38], ['Ship Wheel', '☸️']),
+  route('tunnel', 'Echo Tunnel', '🦇', 'caves', 'short', ['amber', 'Amber Drop', '🟠', 28], ['Echo Shell', '🐚']),
+  route('pool', 'Crystal Pool', '💧', 'caves', 'short', ['moonstone', 'Moonstone', '🌙', 28], ['Glow Worm Jar', '🪲']),
+  route('mine', 'Deep Mine', '⛏️', 'caves', 'big', ['geode', 'Giant Geode', '🔷', 42], ['Miner Lamp', '🔦']),
+  route('bridge', 'Rainbow Bridge', '🌈', 'cloud', 'short', ['prism', 'Prism Drop', '🔆', 32], ['Kite String', '🪁']),
+  route('meteor', 'Meteor Field', '☄️', 'cloud', 'short', ['fallenstar', 'Fallen Star', '🌠', 34], ['Space Rock', '🌑']),
+  route('observatory', 'Star Observatory', '🔭', 'cloud', 'big', ['comet', 'Comet Tail', '💫', 48], ['Star Map', '🗺️']),
 ];
 export const ROUTES_BY_ID = Object.fromEntries(ROUTES.map((r) => [r.id, r]));
+export const TREASURES = ROUTES.map((r) => r.treasure);
 export const SOUVENIRS = ROUTES.map((r) => r.souvenir);
+GOODS.push(...TREASURES);
+for (const t of TREASURES) GOODS_BY_ID[t.id] = t;
+// One explorer critter per land, only from that land's big trip.
+const explorer = (id, name, emoji, element, route) => ({ id, name, emoji, element, route, land: ROUTES_BY_ID[route].land, makes: [ROUTES_BY_ID[route].treasure.id], kind: 'explorer' });
+export const EXPLORERS = [
+  explorer('mossling', 'Mossling', '🦥', 'earth', 'oldoak'),
+  explorer('boltbird', 'Bolt Bird', '🦅', 'wind', 'summit'),
+  explorer('reefpup', 'Reef Pup', '🦭', 'water', 'wreck'),
+  explorer('gemmole', 'Gem Mole', '🦔', 'glow', 'mine'),
+  explorer('starfox', 'Comet Kit', '🐈', 'glow', 'observatory'),
+];
+CRITTERS.push(...EXPLORERS);
+for (const c of EXPLORERS) CRITTERS_BY_ID[c.id] = c;
 JOURNAL_PAGES.explore.entries = [...TREASURES, ...SOUVENIRS];

@@ -1,14 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ALL_ITEMS, THEMES, LEGEND_ITEMS } from '../src/content.js';
-import { ROUTES_BY_ID, farmTrait, JOB_IDS, ELEMENT_IDS, CROPS, CRITTERS_BY_ID, GOODS_BY_ID, JOURNAL_PAGES, DECOR } from '../src/farm-content.js';
+import { ROUTES, ROUTES_BY_ID, TREASURES, farmTrait, JOB_IDS, ELEMENT_IDS, CROPS, CRITTERS_BY_ID, GOODS_BY_ID, JOURNAL_PAGES, DECOR } from '../src/farm-content.js';
 import {
   visitFarm, assignCrew, removeCrew, slotsFor, workPower, stationSpeed, plant, harvestAll, collectGoodies, befriend, befriendCost,
   collectForage, forageWaiting, startCraft, collectCraft, fillRequest, sell, buyPlot, buyPen, plotCost, openBiome, biomeBlock,
   buyDecor, usePerk, perkUsesLeft, hatchEgg, fertilize, sendGift, canGift, farmLocked, farmLevel, xpLeftToday,
   FARM_XP_PER_DAY, XP_PER_LEVEL, FORAGE_MAX_SUN, GOODY_MAX_CYCLES, FERTILIZER_SHARDS, BABY_PITY, START_BELLS, newFarm, journalProgress,
   pourSun, goldenSeason, MORNING_RAIN, GOLDEN_MAX, sendExpedition, collectExpedition, benchFriends, needsMet, expeditionSlots, welcomeExplorer,
-  EXPEDITION_SUN, EXPEDITION_SHARDS,
+  EXPEDITION_SUN, EXPEDITION_SHARDS, nextExpansion, expandCrew, pourTips, sunUseful, EXPAND_LEVEL, MAX_SLOTS,
 } from '../src/farm.js';
 import { newProfile } from '../src/profile.js';
 import { mulberry32 } from '../src/rng.js';
@@ -71,7 +71,8 @@ test('crews: job match counts double and slots grow with farm level', () => {
   // Station slots: 6 to start, 25 at most.
   const total = (f) => ['fields', 'pens', 'forage', 'workshop', 'build'].reduce((s, st) => s + slotsFor(f, st), 0);
   assert.equal(total(p.farm), 6);
-  assert.equal(total({ ...p.farm, xp: XP_PER_LEVEL * 40 }), 25);
+  assert.equal(total({ ...p.farm, xp: XP_PER_LEVEL * 40 }), 6, 'levels alone add no spots');
+  assert.equal(total({ ...p.farm, crewUp: { fields: 9, pens: 9, forage: 9, workshop: 9, build: 9 } }), 25);
   p = removeCrew(p, other);
   assert.deepEqual(p.farm.crew.workshop, []);
 });
@@ -366,7 +367,7 @@ test('expeditions: bench friends only, needs speed them up, rewards include shar
   p = shine(p, 15);
   const r = collectExpedition(p, 0, T0, () => 0);
   assert.equal(r.profile.shards, shards + EXPEDITION_SHARDS.short);
-  assert.equal(r.profile.farm.mapPieces, 1);
+  assert.equal(r.profile.farm.items[ROUTES_BY_ID[p.farm.expeditions[0].route].treasure.id] > 0, true);
   assert.ok(r.story.includes(first5.find((x) => x.id === team[0]).name));
   assert.equal(r.profile.farm.expeditions.length, 0);
   assert.equal(expeditionSlots(r.profile.farm), 2);
@@ -378,7 +379,7 @@ test('needs: elements, jobs and themes count', () => {
   assert.equal(needsMet(ocean.slice(0, 1), [{ kind: 'theme', value: 'ocean', n: 2 }]), 0);
 });
 
-test('big expeditions find their region critter by the pity count', () => {
+test('big expeditions find their route critter by the pity count', () => {
   const ids = first5.slice(0, 20).map((i) => i.id);
   let p = open(kid(ids));
   for (let k = 0; k < 3; k++) {
@@ -400,10 +401,47 @@ test('an old clock-time farm upgrades without losing anything', () => {
   delete old.expeditions;
   delete old.clock;
   const p = visitFarm({ ...kid([]), farm: old }, T0, mulberry32(1)).profile;
-  assert.equal(p.farm.v, 2);
+  assert.equal(p.farm.v, 3);
   assert.equal(harvestAll(p, T0).harvested.length, 1);
   assert.ok(Array.isArray(p.farm.expeditions));
-  assert.equal(p.farm.workshop.ready, 0);
+  assert.equal(p.farm.workshop.grown, 0);
+});
+
+test('areas expand with bells, gated by farm level, up to the cap', () => {
+  let p = open(kid([]));
+  p.farm = { ...p.farm, bells: 5000 };
+  assert.equal(nextExpansion(p, 'pens').reason, 'level');
+  assert.throws(() => expandCrew(p, 'pens'), /farm level 2/);
+  p.farm = { ...p.farm, xp: XP_PER_LEVEL * 30 };
+  const before = slotsFor(p.farm, 'pens');
+  const bells = p.farm.bells;
+  p = expandCrew(p, 'pens');
+  assert.equal(slotsFor(p.farm, 'pens'), before + 1);
+  assert.ok(p.farm.bells < bells);
+  while (nextExpansion(p, 'pens')) p = expandCrew(p, 'pens');
+  assert.equal(slotsFor(p.farm, 'pens'), MAX_SLOTS);
+  assert.throws(() => expandCrew(p, 'pens'), /big as it gets/);
+  assert.deepEqual(EXPAND_LEVEL.length, 4);
+});
+
+test('a grower added after planting still speeds the crop; pour tips warn before wasting Sunshine', () => {
+  const grower = first5.find((i) => farmTrait(i.id).job === 'grower').id;
+  let p = open(kid([grower]));
+  assert.deepEqual(pourTips(p).map((t) => t.id), ['plots']);
+  p = plant(p, 0, 'strawberry', T0);
+  assert.ok(pourTips(p).some((t) => t.id === 'growers'));
+  p = assignCrew(p, grower, 'fields');
+  const need = sunUseful(p);
+  assert.ok(need < 10, 'faster with the grower on the crew');
+  p = shine(p, need);
+  assert.equal(harvestAll(p, T0).harvested.length, 1);
+});
+
+test('every route has its own treasure, and each land has three routes', () => {
+  assert.equal(new Set(TREASURES.map((t) => t.id)).size, ROUTES.length);
+  for (const land of ['meadow', 'frost', 'tide', 'caves', 'cloud']) assert.equal(ROUTES.filter((r) => r.land === land).length, 3, land);
+  const p = open(kid([]));
+  assert.deepEqual(p.farm.routes.list.map((r) => ROUTES_BY_ID[r.route].land), ['meadow', 'meadow', 'meadow']);
 });
 
 test('Wishing Well: a missing friend with the chosen trait, never ultra; coins use a daily pack', async () => {
