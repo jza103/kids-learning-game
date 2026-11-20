@@ -305,13 +305,13 @@ export function initFarm(ctx) {
         : `${STATION_IDS.map((st) => `<button class="small-btn ${at === st ? '' : 'secondary'}" data-action="farm-roster" data-id="${id}" data-st="${st}" ${full(st) ? 'disabled' : ''} title="${STATIONS[st].name}">${STATIONS[st].emoji}</button>`).join('')}
            <button class="small-btn ${at ? 'secondary' : ''}" data-action="farm-roster" data-id="${id}" data-st="" title="Rest">💤</button>`;
       return `<div class="roster-row ${groupOf(id)}"><span class="big-emoji">${friend(id).emoji}</span>
-        <div style="flex:1;min-width:0"><strong>${esc(friend(id).name)}</strong> <span class="small muted">${at === 'trip' ? 'exploring' : at ? STATIONS[at].name : 'resting'}</span>
+        <div class="roster-info"><strong>${esc(friend(id).name)}</strong> <span class="small muted">${at === 'trip' ? 'exploring' : at ? STATIONS[at].name : 'resting'}</span>
           <div>${traitBadge(id)} ${handTag(f, id)}</div>${energyBar(f, id)}
-          <div class="small muted">Stamps: ${STATION_IDS.map((st) => (stamps.includes(st) ? STATIONS[st].emoji : '▫️')).join('')}</div></div>
+          <div class="small muted">${allRounder(f, id) ? '🎖️ All-Rounder!' : `🎖️ All-Rounder: worked ${stamps.length}/${STATION_IDS.length} areas ${STATION_IDS.map((st) => (stamps.includes(st) ? STATIONS[st].emoji : '▫️')).join('')}`}</div></div>
         <div class="roster-moves">${moves}</div></div>`;
     }).join('');
     return `<div class="card small"><p>Every friend has ⚡ <strong>energy</strong> and farm know-how. Friends on a crew learn as you pour Sunshine and rank up from ${RANKS.map((r) => r.emoji).join(' → ')}; each rank helps them work harder. Working uses energy. A tired friend 😴 still works, but at half power, and stops learning.
-      Resting friends get ${ENERGY_REST}× the energy back from the same Sunshine, plus ${MORNING_ENERGY} every morning, so swap them around! Work ${JOB_STAMP_SUN} ☀️ in every area for an All-Rounder 🎖️ medal (+1 power everywhere).</p></div>
+      Resting friends get ${ENERGY_REST}× the energy back from the same Sunshine, plus ${MORNING_ENERGY} every morning, so swap them around! A friend who works ${JOB_STAMP_SUN} ☀️ in each of the 5 areas earns the All-Rounder 🎖️ medal (+1 power everywhere).</p></div>
       <div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:10px">${chips.map(([id, label]) => `<button class="small-btn ${filter === id ? '' : 'secondary'}" data-action="farm-roster-filter" data-id="${id}">${label}</button>`).join('')}</div>
       <div class="card">${rows || '<p class="muted">Nobody here right now.</p>'}</div>`;
   }
