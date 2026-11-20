@@ -935,7 +935,9 @@ export const EXPEDITION_SHARDS = { short: 3, big: 8 };
 export const EXPEDITION_BELLS = { short: 15, big: 40 };
 export const EXPLORER_CHANCE = 0.3;
 export const EXPLORER_PITY = 3; // big trips on a route before its critter is guaranteed
-export const FARM_XP_TRIP = { short: 8, big: 16 };
+// Farm XP for bringing a trip home: none, the Sunshine poured into it already
+// counted, and up to 4 trips fill from the same Sunshine (sim/, 2026-11-20).
+export const FARM_XP_TRIP = { short: 0, big: 0 };
 
 export function expeditionSlots(farm) {
   const level = farmLevel(farm);
