@@ -57,17 +57,30 @@ export function parseWordList(text) {
   if (lines.filter((l) => l.trim()).length === 1 && !text.includes('|') && text.includes(',')) {
     lines = text.split(',');
   }
+  return cleanEntries(
+    lines.map((raw) => {
+      const line = raw.replace(/^\s*(\d+[.)]|[-*•])\s+/, ''); // strip "1." or "-" list markers
+      const [w, ...rest] = line.split('|');
+      return { word: w, sentence: rest.join('|') };
+    }),
+  );
+}
+
+/**
+ * Tidy typed entries ({ word, sentence }) from the word form or a pasted
+ * list: trims, drops blanks and repeats, and gives each word its id. Every
+ * way of adding words (one at a time now, bulk lists later) goes through here.
+ */
+export function cleanEntries(entries) {
   const seen = new Set();
   const out = [];
-  for (const raw of lines) {
-    const line = raw.replace(/^\s*(\d+[.)]|[-*•])\s+/, ''); // strip "1." or "-" list markers
-    const [w, ...rest] = line.split('|');
-    const word = (w || '').replace(/\s+/g, ' ').trim();
+  for (const e of entries) {
+    const word = String(e.word || '').replace(/\s+/g, ' ').trim();
     if (!word) continue;
     const key = wordKey(word);
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ id: key, word, sentence: rest.join('|').trim() });
+    out.push({ id: key, word, sentence: String(e.sentence || '').replace(/\s+/g, ' ').trim() });
   }
   return out;
 }

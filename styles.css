@@ -163,6 +163,16 @@ select { font: inherit; font-size: 1rem; padding: 10px; border-radius: 12px; bor
 .warn { color: #9a5b00; font-size: 0.9em; margin-top: 4px; }
 .nowrap { white-space: nowrap; }
 table.check td { vertical-align: top; }
+.your-try { text-align: center; color: var(--muted); font-size: .95rem; margin: 0 0 8px; }
+.your-try s { text-decoration-thickness: 1px; }
+.entry { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.entry input { width: 100%; min-width: 0; font-size: 16px; }
+.entry-tips { grid-column: 1 / -1; }
+.entry-tips:empty { display: none; }
+@media (max-width: 600px) {
+  .entry { grid-template-columns: minmax(0, 1fr) auto; }
+  .entry [name=sentence] { grid-column: 1 / -1; grid-row: 2; }
+}
 
 /* Friend growth (friends.js) */
 .friend-meta { display: grid; gap: 4px; margin-top: 6px; }
