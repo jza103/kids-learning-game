@@ -1,0 +1,31 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { grant, RESOURCES } from '../src/grant.js';
+import { newProfile } from '../src/profile.js';
+import { farmOf, sunJar } from '../src/farm.js';
+
+test('grown-ups can give every resource', () => {
+  let p = newProfile('Ava', 1);
+  p = grant(p, 'nuggets', 200);
+  p = grant(p, 'dust', 60);
+  p = grant(p, 'xp', 100);
+  p = grant(p, 'super', 1);
+  p = grant(p, 'sun', 50);
+  p = grant(p, 'bells', 1000);
+  p = grant(p, 'seeds', 5);
+  p = grant(p, 'eggs', 3);
+  p = grant(p, 'farmxp', 100);
+  assert.equal(p.coins, 200);
+  assert.equal(p.shards, 60);
+  assert.equal(p.xp, 100);
+  assert.equal(p.superPacks, 1);
+  assert.equal(sunJar(p), 50);
+  const f = farmOf(p);
+  assert.equal(f.wonderSeeds, 5);
+  assert.equal(f.eggs, 3);
+  assert.equal(f.xp, 100);
+  assert.ok(f.bells >= 1000);
+  p = { ...p, packs: { ...p.packs, openedToday: 5 } };
+  assert.equal(grant(p, 'packs', 0).packs.openedToday, 0);
+  for (const r of RESOURCES) assert.equal(typeof r.get(p), 'number', r.id);
+});
