@@ -141,3 +141,53 @@ test('summaries and hints', () => {
 test('unknown fact throws', () => {
   assert.throws(() => recordFact(kid(), 'nope', 'correct', { now: T0 }));
 });
+
+import { withSolveTime, slowestFacts, formatTime, trialFacts, finalMissionFacts, recordTrial, trialKey, FINAL_KEY, FINAL_LENGTH, SOLVE_TIME_CAP_MS, TRIAL_RECORD_XP } from '../src/math.js';
+
+test('solve times: running average per fact, slowest first', () => {
+  let p = kid();
+  p = recordFact(p, 'm7x8', 'correct', { now: T0, ms: 6000 }).profile;
+  p = recordFact(p, 'm2x2', 'correct', { now: T0, ms: 1000 }).profile;
+  p = recordFact(p, 'm3x3', 'wrong', { now: T0, ms: 500 }).profile; // wrong answers aren't timed
+  const s = mathState(p);
+  assert.equal(s.srs.m7x8.avgMs, 6000);
+  assert.equal(s.srs.m3x3.avgMs, undefined);
+  assert.deepEqual(slowestFacts(s).map((f) => f.id), ['m7x8', 'm2x2']);
+  // Recent answers count most; long pauses are capped.
+  const item = withSolveTime(withSolveTime({ id: 'x' }, 6000), 2000);
+  assert.ok(item.avgMs < 6000 && item.avgMs > 2000);
+  assert.equal(withSolveTime({ id: 'x' }, 999999).avgMs, SOLVE_TIME_CAP_MS);
+  assert.equal(item.timed, 2);
+});
+
+test('time formatting', () => {
+  assert.equal(formatTime(9840), '9.8s');
+  assert.equal(formatTime(83400), '1:23.4');
+  assert.equal(formatTime(60000), '1:00.0');
+});
+
+test('time trials: every fact of the table, final mission covers every table', () => {
+  const rng = mulberry32(5);
+  const t = trialFacts('mul', 7, rng);
+  assert.equal(t.length, 13);
+  assert.equal(new Set(t.map((f) => f.id)).size, 13);
+  const fin = finalMissionFacts(rng);
+  assert.equal(fin.length, FINAL_LENGTH);
+  const tables = new Set(fin.map((f) => `${f.op}${f.table}`));
+  assert.equal(tables.size, 25);
+});
+
+test('trial records keep the personal best', () => {
+  let p = kid();
+  let r = recordTrial(p, trialKey('mul', 7), 40000);
+  assert.ok(r.newBest);
+  assert.equal(r.xp, TRIAL_RECORD_XP);
+  r = recordTrial(r.profile, trialKey('mul', 7), 45000);
+  assert.ok(!r.newBest);
+  assert.equal(r.xp, 0);
+  assert.equal(r.prevBest, 40000);
+  r = recordTrial(r.profile, trialKey('mul', 7), 30000);
+  assert.ok(r.newBest);
+  assert.deepEqual(mathState(r.profile).records['mul:7'], { best: 30000, last: 30000, runs: 3 });
+  assert.equal(mathState(recordTrial(r.profile, FINAL_KEY, 90000).profile).records.final.best, 90000);
+});

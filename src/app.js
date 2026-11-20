@@ -26,7 +26,7 @@ import { GAME_TYPES, GAME_TYPE_IDS } from './games.js';
 import { initMath } from './mathgame.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-20.2';
+const APP_VERSION = '2026-11-20.3';
 const app = document.getElementById('app');
 let data = load();
 for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
@@ -1091,7 +1091,7 @@ const cancelHold = () => {
 
 // ---------- render ----------
 function render(opts = {}) {
-  if (['hub', 'play', 'summary', 'packs', 'book', 'locker', 'words', 'math', 'math-play', 'math-summary', 'math-facts', ...VOCAB_SCREENS].includes(ui.screen) && !profile()) ui.screen = 'home';
+  if (['hub', 'play', 'summary', 'packs', 'book', 'locker', 'words', 'math', 'math-play', 'math-summary', 'math-facts', 'math-trial', 'math-trial-done', ...VOCAB_SCREENS].includes(ui.screen) && !profile()) ui.screen = 'home';
   if (ui.screen === 'play' && app.dataset.screen === 'play') {
     patchPlay(opts);
   } else {

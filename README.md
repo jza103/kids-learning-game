@@ -36,6 +36,8 @@ An iPad-friendly learning game for my kids. Parent loads weekly spelling words; 
 - **Anti-grind:** answering a fact before it's due pays 2 coins and adds no star. Mastering a fact pays 15 coins once, and every 2 mastered facts fill one Super Pack dot (shared with spelling).
 - **Play:** 12-question monster battle with an on-screen number pad (keyboard digits and Enter work on a computer). A miss shows the right fact big and what the kid typed small and crossed out, then they type the answer once to lock it in. Hint = a skip-counting clue.
 - **Friend hooks:** `mathPowers()` and `afterMathAnswer()` at the top of `src/mathgame.js` are where game-type-aware friend powers plug in.
+- **Time trials:** race every fact of one table (× , ÷ or mixed) against a stopwatch; a miss adds 3 s and must be fixed. Each table keeps a personal best (`profile.math.records`, key like `mul:7`). The 🏁 Final mission takes one random fact from every × table (0–12) and ÷ table (1–12), 25 facts, with its own record. A new best gives 30 XP (cosmetic). Personal bests only, never compared between kids. First tries in a trial count for stars and coins like Speed mode.
+- **Solve times:** every right answer records how long it took; each fact keeps a running average (newest answer weighs 30%, pauses capped at 20 s). "My facts" and the grown-ups screen list the slowest facts.
 - **Kid view:** "My facts" shows color-coded × and ÷ charts. Grown-ups screen shows mastered facts per table, tricky facts and the timer setting.
 
 ## How Word Match (vocabulary) works
@@ -62,7 +64,8 @@ See `recon.md`. Short version: kids like Blooket (collection/reveal rewards, gam
 - **Randomized rewards: decided (2026-11-19)** after Jason tested Blooket with the kids: collectibles with rarity via packs, kept mild. Odds shown, pity guarantees, duplicates → shards, daily cap, kid picks a theme, collectibles give in-game powers and fill a collection book, coins only from correct answers (missed words pay more, mastered less), parent writes the content. Background in `appeal-analysis.md`.
 
 ## Where we left off
-- Last done (2026-11-20): times tables game (× ÷ mixed, practice and speed modes, per-fact mastery). Checked at iPhone, iPad and desktop sizes in a headless browser.
+- Last done (2026-11-20): time trials per table, the Final mission, and per-fact solve times (Jason's request after the first math build).
+- Earlier (2026-11-20): times tables game (× ÷ mixed, practice and speed modes, per-fact mastery). Checked at iPhone, iPad and desktop sizes in a headless browser.
 - Before that (2026-11-19): went live on GitHub Pages; added the growing word bank with mastery stars, Super Packs and ElevenLabs voice. Then, from Jason's listening: spelling-test context for AI clips, a live check of typed words with tips and a 🔊 preview per word, and ✕ now deletes a word completely (stars and audio). After the first playtest (iPhone): a miss shows the kid's attempt small and struck through under the correct spelling, and the grown-ups form has a word box plus an optional sentence box per word instead of the `|` syntax. Every way of adding words goes through `cleanEntries` in `src/profile.js`; `parseWordList` (pasted lists with `|`) is kept for bulk loading later.
 - 2026-11-20: added Word Match, a tap-to-match vocabulary game with 44 starter words and a Word/Meaning editor on the grown-ups screen.
 - Also (2026-11-20): friend specialties, XP, evolution and learning new games, with daily caps (`docs/friends-pacing.md`). Math and vocab games are being built in parallel and call the same friend hooks.
