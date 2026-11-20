@@ -36,7 +36,7 @@ export const MAX_NEW_PER_ROUND = 5; // new facts per round, so it's never a wall
 export const PRACTICE_MAX_BOX = 3;
 export const PRACTICE_REWARD = 0.5;
 // Speed mode: seconds per question. A right answer after the time runs out
-// still hits the monster, but counts like a hinted answer (no new star, half coins).
+// still moves the cart, but counts like a hinted answer (no new star, half coins).
 export const SECONDS_CHOICES = [4, 6, 8, 10, 15];
 export const DEFAULT_SECONDS = 6;
 // A fact that isn't due yet pays this little, so repeating easy facts isn't worth it.

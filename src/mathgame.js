@@ -1,6 +1,6 @@
 // UI for the times tables game. app.js passes in its helpers and merges these
 // screens and actions into its own.
-import { MONSTERS } from './content.js';
+import { ACTIVITIES, arenaHtml, zapText, clearedText, missText, animFor, targetsFor, randomStart, trialTrackHtml } from './mine.js';
 import { MAX_BOX } from './srs.js';
 import { newBattle, applyAnswer } from './battle.js';
 import { applyXpBoost, levelForXp, XP_PER } from './progress.js';
@@ -68,11 +68,11 @@ export function initMath(ctx) {
     const best = table != null ? bestOf(state, trialKey(op, table)) : null;
     const fin = bestOf(state, FINAL_KEY);
     return `<div class="card">
-        <h3>⏱️ Time trials</h3>
-        <p class="small muted">Answer every fact in a table as fast as you can (tap a table below to race it). A miss adds ${TRIAL_PENALTY_MS / 1000} seconds. Try to beat your own best time!</p>
+        <h3>🛤️ Cart races</h3>
+        <p class="small muted">Race your cart through every fact in a table (tap a table below to race it). A miss adds ${TRIAL_PENALTY_MS / 1000} seconds. Try to beat your own best time!</p>
         ${
           table != null
-            ? `<button class="big" style="width:100%" data-action="math-trial" data-key="${trialKey(op, table)}">⏱️ ${trialName(op, table)}${best ? ` · best ${formatTime(best)}` : ''}</button>`
+            ? `<button class="big" style="width:100%" data-action="math-trial" data-key="${trialKey(op, table)}">🛒 ${trialName(op, table)}${best ? ` · best ${formatTime(best)}` : ''}</button>`
             : '<p><strong>Pick a table above to race it.</strong></p>'
         }
         <div class="records">${tables
@@ -83,23 +83,23 @@ export function initMath(ctx) {
           .join('')}</div>
       </div>
       <div class="card final-card">
-        <h3>🏁 Final mission</h3>
-        <p class="small">${FINAL_LENGTH} facts from every table, × and ÷. ${fin ? `Your best: <strong>${formatTime(fin)}</strong>` : 'No record yet.'}</p>
-        <button class="big super" style="width:100%" data-action="math-trial" data-key="${FINAL_KEY}">🏁 Start the final mission</button>
+        <h3>🚂 Mother Lode Express</h3>
+        <p class="small">${FINAL_LENGTH} facts from every table, × and ÷, all the way down to the Mother Lode. ${fin ? `Your best: <strong>${formatTime(fin)}</strong>` : 'No record yet.'}</p>
+        <button class="big super" style="width:100%" data-action="math-trial" data-key="${FINAL_KEY}">🚂 Ride the Mother Lode Express</button>
       </div>`;
   }
 
   function trialTitle(key) {
-    if (key === FINAL_KEY) return '🏁 Final mission';
+    if (key === FINAL_KEY) return '🚂 Mother Lode Express';
     const [op, t] = key.split(':');
-    return `⏱️ ${trialName(op, Number(t))}`;
+    return `🛒 ${trialName(op, Number(t))}`;
   }
 
   const screens = {
     math() {
       const p = profile();
       const state = mathState(p);
-      return `${topbar('Times tables')}
+      return `${topbar('🛒 Mine Cart Run')}
         <div class="card"><h3>Pick a game</h3>${opPicker()}</div>
         <div class="card"><h3>Which tables?</h3>${tablePicker(state)}</div>
         <div class="mode-pick">
@@ -125,15 +125,7 @@ export function initMath(ctx) {
           <span class="pill">${MODES[game.mode].emoji} ${Math.min(b.asked + (game.phase === 'ask' ? 1 : 0), ROUND_LENGTH)} of ${ROUND_LENGTH}</span>
           <span class="pill">🪙 ${p.coins}</span>
         </div>
-        <div class="arena">
-          <div>${heroHtml(p, 'sm')}<div class="small muted" style="margin-top:6px">${b.combo >= 2 ? `🔥 ${b.combo} in a row` : '&nbsp;'}</div></div>
-          <div class="zap">${game.zap || ''}</div>
-          <div>
-            <span class="monster ${game.anim || ''}">${game.shownMonster.emoji}</span>
-            <div class="small"><strong>${esc(game.shownMonster.name)}</strong></div>
-            <div class="hp"><div style="width:${(100 * game.shownHp) / game.shownMonster.hp}%"></div></div>
-          </div>
-        </div>
+        ${arenaHtml('math', { hero: heroHtml(p, 'sm'), combo: b.combo, zap: game.zap, anim: game.anim, target: game.shownMonster, hp: game.shownHp, from: game.from })}
         <div class="card math-card">
           ${
             game.mode === 'speed' && game.phase === 'ask'
@@ -168,7 +160,7 @@ export function initMath(ctx) {
       return `<h1>Round done! 🎉</h1>
         <div class="card">
           <div class="row" style="font-size:1.3rem;gap:24px">
-            <span>🪙 +${game.earned.coins}</span><span>⭐ +${game.earned.xp} XP</span>${game.earned.sun ? `<span>☀️ +${game.earned.sun}</span>` : ''}<span>👾 ${game.battle.defeated} defeated</span>
+            <span>🪙 +${game.earned.coins}</span><span>⭐ +${game.earned.xp} XP</span>${game.earned.sun ? `<span>☀️ +${game.earned.sun}</span>` : ''}<span>${ACTIVITIES.math.count(game.battle.defeated)}</span>
           </div>
           <p>${game.right} of ${game.battle.asked} right${game.mode === 'speed' ? ` · ${game.fast} in time` : ''}.</p>
           ${mastered.length ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((f) => `${esc(f.text)} = ${f.answer}`).join(', ')}!</strong> +${FACT_MASTERY_COINS * mastered.length} 🪙</p>` : ''}
@@ -205,7 +197,7 @@ export function initMath(ctx) {
         </div>
         <div class="card math-card">
           <div class="clock" id="trial-clock">${formatTime(trialElapsed(t))}</div>
-          <div class="trial-progress"><div style="width:${(100 * t.i) / t.facts.length}%"></div></div>
+          ${trialTrackHtml(heroHtml(profile(), 'sm'), t.from ?? t.i / t.facts.length, t.i / t.facts.length)}
           <div class="small muted" style="text-align:center;margin-bottom:8px">${t.i + 1} of ${t.facts.length}${t.penalty ? ` · +${t.penalty / 1000}s for misses` : ''}</div>
           ${t.fix ? `<div class="your-answer" style="text-decoration:none">It's ${f.answer}. Type it to keep going.</div>` : ''}
           <div class="fact">${esc(f.text)} = <span class="slot" id="math-answer">${esc(t.typed) || '?'}</span></div>
@@ -218,7 +210,7 @@ export function initMath(ctx) {
       const t = ui.math.trial;
       const r = t.result;
       const slowest = [...t.times].sort((a, b) => b.ms - a.ms).slice(0, 3);
-      return `<h1>${r.newBest ? '🎉 New record!' : '🏁 Finished!'}</h1>
+      return `<h1>${r.newBest ? '🎉 New record!' : '🚉 Made it!'}</h1>
         <div class="card">
           <div class="clock">${formatTime(r.ms)}</div>
           <p style="text-align:center">${esc(trialTitle(t.key))} · ${t.facts.length} facts${t.misses ? ` · ${t.misses} miss${t.misses > 1 ? 'es' : ''} (+${t.penalty / 1000}s)` : ' · no misses!'}</p>
@@ -340,10 +332,11 @@ export function initMath(ctx) {
     if (!right) {
       t.penalty += TRIAL_PENALTY_MS;
       t.misses += t.fix ? 0 : 1;
-      Object.assign(t, { fix: true, typed: '', feedback: `+${TRIAL_PENALTY_MS / 1000}s`, feedbackClass: 'bad' });
+      Object.assign(t, { fix: true, from: null, typed: '', feedback: `+${TRIAL_PENALTY_MS / 1000}s`, feedbackClass: 'bad' });
       render();
       return;
     }
+    t.from = t.i / t.facts.length;
     t.i++;
     Object.assign(t, { fix: false, typed: '', feedback: '', feedbackClass: '' });
     if (t.i >= t.facts.length) {
@@ -371,7 +364,7 @@ export function initMath(ctx) {
       table: ui.math.table,
       seconds: state.seconds,
       powers,
-      battle: newBattle(powers, Math.floor(Math.random() * MONSTERS.length)),
+      battle: newBattle(powers, randomStart('math'), targetsFor('math')),
       recent: [],
       newUsed: 0,
       missed: new Set(),
@@ -398,7 +391,7 @@ export function initMath(ctx) {
     if (!f) return finishRound();
     if (!itemFor(state, f.id, now).seen) game.newUsed++;
     game.recent = [f.id, ...game.recent].slice(0, Math.min(4, pool.length - 1));
-    Object.assign(game, { fact: f, phase: 'ask', typed: '', usedHint: false, late: false, feedback: '', feedbackClass: '', zap: '', anim: '' });
+    Object.assign(game, { fact: f, phase: 'ask', typed: '', usedHint: false, late: false, feedback: '', feedbackClass: '', zap: '', anim: '', from: null });
     game.shownMonster = game.battle.monster;
     game.shownHp = game.battle.hp;
     game.token++;
@@ -470,6 +463,7 @@ export function initMath(ctx) {
     const f = game.fact;
     const value = Number(game.typed);
     if (game.phase === 'copy') {
+      Object.assign(game, { anim: '', from: null });
       if (value === f.answer) {
         Object.assign(game, { phase: 'wait', feedback: 'Locked in! 🔒', feedbackClass: 'good' });
         render();
@@ -496,6 +490,8 @@ export function initMath(ctx) {
     const battleResult = game.mode === 'practice' && result !== 'hinted' && right ? 'correct' : rec.battleResult;
     const { battle, events } = applyAnswer(game.battle, battleResult, game.powers);
     const defeated = events.find((e) => e.type === 'defeated');
+    game.from = (game.shownMonster.hp - game.shownHp) / game.shownMonster.hp;
+    game.anim = animFor(events);
     game.shownMonster = defeated ? game.battle.monster : battle.monster;
     game.shownHp = defeated ? 0 : battle.hp;
     game.battle = battle;
@@ -511,15 +507,14 @@ export function initMath(ctx) {
       if (result === 'correct') game.fast++;
       const hit = events.find((e) => e.type === 'hit');
       game.phase = 'wait';
-      game.zap = `💥${hit.damage > 1 ? ` ×${hit.damage}` : ''}`;
-      game.anim = defeated ? 'down' : 'hit';
+      game.zap = zapText('math', hit.damage);
       game.feedback = defeated
-        ? `You beat ${defeated.monster.name}! ${defeated.monster.emoji}`
+        ? clearedText('math', defeated.monster)
         : result === 'slow'
         ? `Right! ${f.text} = ${f.answer}. Faster next time for full coins.`
         : game.mode === 'speed'
         ? `⚡ ${seconds.toFixed(1)}s!`
-        : ['Nice!', 'Yes!', 'Great!', 'Boom!'][Math.floor(Math.random() * 4)];
+        : ['Nice!', 'Yes!', 'Great!', 'Zoom!'][Math.floor(Math.random() * 4)];
       if (rec.mastered) {
         game.mastered.push(f.id);
         game.earned.coins += FACT_MASTERY_COINS;
@@ -536,7 +531,7 @@ export function initMath(ctx) {
         wrongAnswer: game.typed,
         typed: '',
         zap: '',
-        feedback: events.some((e) => e.type === 'shielded') ? '🛡️ Your shield stopped the monster from healing.' : '',
+        feedback: missText('math', events),
         feedbackClass: '',
       });
       render();

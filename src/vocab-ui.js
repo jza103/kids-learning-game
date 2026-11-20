@@ -1,6 +1,6 @@
 // Word Match screens, actions and grown-ups editor. Kept out of app.js so the
 // games can grow side by side; app.js passes in its shared helpers as `ctx`.
-import { MONSTERS } from './content.js';
+import { ACTIVITIES, activityLabel, arenaHtml, zapText, clearedText, missText, animFor, targetsFor, randomStart } from './mine.js';
 import { masteryRating, masterySummary, MAX_BOX } from './srs.js';
 import { MASTERY_COINS, coinPaceNote } from './economy.js';
 import { XP_PER, applyXpBoost, levelForXp } from './progress.js';
@@ -31,7 +31,7 @@ export function createVocab(ctx) {
     const powers = powersFor(p);
     ui.vocab = {
       powers,
-      battle: newBattle(powers, Math.floor(Math.random() * MONSTERS.length)),
+      battle: newBattle(powers, randomStart('vocab'), targetsFor('vocab')),
       boardNo: 0,
       newLeft: MAX_NEW_PER_ROUND,
       recent: [],
@@ -71,6 +71,7 @@ export function createVocab(ctx) {
     s.feedbackClass = '';
     s.zap = '';
     s.anim = '';
+    s.from = null;
     s.shownMonster = s.battle.monster;
     s.shownHp = s.battle.hp;
     ui.screen = 'vocab';
@@ -95,6 +96,7 @@ export function createVocab(ctx) {
     const firstTry = !b.tried.includes(wordId);
     s.zap = '';
     s.anim = '';
+    s.from = null;
     b.wrong = null;
     let rec = null;
     let events = [];
@@ -112,6 +114,8 @@ export function createVocab(ctx) {
       const out = applyAnswer(s.battle, result, s.powers);
       events = out.events;
       const defeated = events.find((e) => e.type === 'defeated');
+      s.from = (s.shownMonster.hp - s.shownHp) / s.shownMonster.hp;
+      s.anim = animFor(events);
       s.shownMonster = defeated ? s.battle.monster : out.battle.monster;
       s.shownHp = defeated ? 0 : out.battle.hp;
       s.battle = out.battle;
@@ -129,12 +133,9 @@ export function createVocab(ctx) {
       const word = b.words.find((w) => w.id === wordId);
       const defeated = events.find((e) => e.type === 'defeated');
       const hit = events.find((e) => e.type === 'hit');
-      if (hit) {
-        s.zap = `💥${hit.damage > 1 ? ` ×${hit.damage}` : ''}`;
-        s.anim = defeated ? 'down' : 'hit';
-      }
+      if (hit) s.zap = zapText('vocab', hit.damage);
       s.feedback = defeated
-        ? `You beat ${defeated.monster.name}! ${defeated.monster.emoji}`
+        ? clearedText('vocab', defeated.monster)
         : firstTry
         ? ['Match!', 'Yes!', 'You got it!', 'Nice one!'][Math.floor(Math.random() * 4)]
         : `That's it: ${word.word}.`;
@@ -157,7 +158,7 @@ export function createVocab(ctx) {
     } else {
       if (firstTry) s.missed.add(wordId);
       b.wrong = { wordId, defId };
-      s.feedback = events.some((e) => e.type === 'shielded') ? '🛡️ Not that one, but your shield stopped the heal. Try again!' : 'Not that one. Try again!';
+      s.feedback = missText('vocab', events);
       s.feedbackClass = 'bad';
       ctx.render();
     }
@@ -173,29 +174,21 @@ export function createVocab(ctx) {
         <span class="pill">Board ${s.boardNo} of ${BOARDS_PER_ROUND}</span>
         <span class="pill">🪙 ${p.coins}</span>
       </div>
-      <div class="arena">
-        <div>${ctx.heroHtml(p)}<div class="small muted" style="margin-top:6px">${b.combo >= 2 ? `🔥 ${b.combo} in a row` : '&nbsp;'}</div></div>
-        <div class="zap">${s.zap || ''}</div>
-        <div>
-          <span class="monster ${s.anim || ''}">${s.shownMonster.emoji}</span>
-          <div class="small"><strong>${esc(s.shownMonster.name)}</strong></div>
-          <div class="hp"><div style="width:${(100 * s.shownHp) / s.shownMonster.hp}%"></div></div>
-        </div>
-      </div>`;
+      ${arenaHtml('vocab', { hero: ctx.heroHtml(p), combo: b.combo, zap: s.zap, anim: s.anim, target: s.shownMonster, hp: s.shownHp, from: s.from })}`;
   }
 
   function introHtml() {
     const s = g();
     return `<div class="card vocab-intro">
       <h3>${s.intro.length === 1 ? 'A new word!' : 'New words!'}</h3>
-      <p class="small muted">Read these, then find them on the board.</p>
+      <p class="small muted">Read these, then sort them into the right crates.</p>
       ${s.intro
         .map(
           (w) => `<div class="intro-word"><button type="button" class="ghost" data-action="vocab-say" data-id="${esc(w.id)}" aria-label="Hear ${esc(w.word)}">🔊</button>
             <div><strong>${esc(w.word)}</strong><div>${esc(w.definition)}</div></div></div>`,
         )
         .join('')}
-      <button class="big" style="width:100%;margin-top:12px" data-action="vocab-go">Let's match! 🧩</button>
+      <button class="big" style="width:100%;margin-top:12px" data-action="vocab-go">Let's sort! 🪣</button>
     </div>`;
   }
 
@@ -221,7 +214,7 @@ export function createVocab(ctx) {
       .join('');
     const canHint = s.phase === 'match' && s.battle.hintsLeft > 0 && b.words.length - b.matched.length >= 2;
     return `<div class="card">
-      <p class="small muted" style="text-align:center;margin-top:0">${s.phase === 'cleared' ? 'Board clear! ✨' : 'Tap a word, then tap what it means.'}</p>
+      <p class="small muted" style="text-align:center;margin-top:0">${s.phase === 'cleared' ? 'All sorted! ✨' : 'Tap a word chunk, then the crate with what it means.'}</p>
       <div class="match">
         <div class="match-words">${wordTiles}</div>
         <div class="match-defs">${defTiles}</div>
@@ -259,10 +252,10 @@ export function createVocab(ctx) {
       const byId = Object.fromEntries(v.words.map((w) => [w.id, w]));
       const missed = [...s.missed].map((id) => byId[id]).filter(Boolean);
       const mastered = s.mastered.map((id) => byId[id]).filter(Boolean);
-      return `<h1>Matching done! 🧩</h1>
+      return `<h1>Sorting done! 🪣</h1>
         <div class="card">
           <div class="row" style="font-size:1.3rem;gap:24px">
-            <span>🪙 +${s.earned.coins}</span><span>⭐ +${s.earned.xp} XP</span>${s.earned.sun ? `<span>☀️ +${s.earned.sun}</span>` : ''}<span>🎯 ${s.earned.firstTry}/${s.battle.asked} first try</span><span>👾 ${s.battle.defeated} defeated</span>
+            <span>🪙 +${s.earned.coins}</span><span>⭐ +${s.earned.xp} XP</span>${s.earned.sun ? `<span>☀️ +${s.earned.sun}</span>` : ''}<span>🎯 ${s.earned.firstTry}/${s.battle.asked} first try</span><span>${ACTIVITIES.vocab.count(s.battle.defeated)}</span>
           </div>
           ${mastered.length ? `<p style="font-size:1.3rem">🌟 <strong>You mastered ${mastered.map((w) => `“${esc(w.word)}”`).join(', ')}!</strong> +${MASTERY_COINS * mastered.length} 🪙</p>` : ''}
           ${ctx.superProgressHtml(p)}
@@ -454,7 +447,7 @@ export function createVocab(ctx) {
   /** The Word Match button on the hub. */
   function hubButton(p) {
     const n = vocabItems(p).length;
-    return `<button class="big secondary" style="width:100%;margin-bottom:16px" data-action="vocab-play" ${n >= MIN_WORDS ? '' : 'disabled'}>🧩 Word Match</button>`;
+    return `<button class="big secondary" style="width:100%;margin-bottom:16px" data-action="vocab-play" ${n >= MIN_WORDS ? '' : 'disabled'}>${activityLabel('vocab')}</button>`;
   }
 
   return { screens, actions, parentHtml, hubButton };

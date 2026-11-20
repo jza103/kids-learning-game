@@ -1,17 +1,17 @@
-// Game content: collectible themes, monsters and cosmetic unlocks.
+// Game content: collectible themes, mining targets and cosmetic unlocks.
 // Art is emoji so everything works offline with no image assets.
 
 // Power kinds a collectible can give when it's on your team:
 //  hint   - reveal the first letters of a word (per-round charges)
-//  power  - extra damage on every correct answer
-//  shield - a miss doesn't let the monster heal (per-round charges)
+//  power  - extra progress on every correct answer (a harder swing, a bigger nugget, a faster push)
+//  shield - a miss doesn't cost progress (per-round charges)
 //  xp     - bonus player XP (percent)
 //  buddy  - bonus friend XP for everyone on the team (percent, capped)
 // Each game type decides what hint/power/shield mean in that game.
 export const POWER_INFO = {
-  hint: { label: 'Hint', describe: (n) => `${n} hint${n > 1 ? 's' : ''} per battle` },
-  power: { label: 'Power', describe: (n) => `+${n} damage per hit` },
-  shield: { label: 'Shield', describe: (n) => `blocks ${n} monster heal${n > 1 ? 's' : ''} per battle` },
+  hint: { label: 'Hint', describe: (n) => `${n} hint${n > 1 ? 's' : ''} per round` },
+  power: { label: 'Power', describe: (n) => `+${n} extra dig, nugget or push per right answer` },
+  shield: { label: 'Shield', describe: (n) => `stops ${n} slip-back${n > 1 ? 's' : ''} per round` },
   xp: { label: 'XP boost', describe: (n) => `+${n * 10}% XP for you` },
   buddy: { label: 'Friend boost', describe: (n) => `+${n * 10}% friend XP for the team` },
 };
@@ -239,14 +239,37 @@ export const ALL_ITEMS = THEMES.flatMap((t) => t.items.map((i) => ({ ...i, theme
 export const LEGEND_ITEMS = LEGENDS.map((i) => ({ ...i, theme: 'legend' }));
 export const ITEMS_BY_ID = Object.fromEntries([...ALL_ITEMS, ...LEGEND_ITEMS].map((i) => [i.id, i]));
 
-export const MONSTERS = [
-  { name: 'Grumble Blob', emoji: '🟢', hp: 4 },
-  { name: 'Sneezy Ghost', emoji: '👻', hp: 5 },
-  { name: 'Glitch', emoji: '👾', hp: 5 },
-  { name: 'Mumbles', emoji: '🧟', hp: 6 },
-  { name: 'Spell Goblin', emoji: '👺', hp: 6 },
-  { name: 'Typo Dragon', emoji: '🐲', hp: 7 },
-];
+// What each round works on, per game. Sizes match the old monsters (4-7), so
+// rewards per finished target are unchanged.
+//  spelling - Gem Dig: crack a rock to find a gem
+//  vocab    - Ore Sorting: fill an ore bucket
+//  math     - Mine Cart Run: race the cart to the next station
+export const MINE_TARGETS = {
+  spelling: [
+    { name: 'Rose Quartz', emoji: '💎', hp: 4, look: 'hue-rotate(130deg) saturate(.7) brightness(1.15)' },
+    { name: 'Amethyst', emoji: '💎', hp: 5, look: 'hue-rotate(60deg) saturate(1.4)' },
+    { name: 'Topaz', emoji: '💎', hp: 5, look: 'hue-rotate(185deg) saturate(1.8) brightness(1.1)' },
+    { name: 'Emerald', emoji: '💎', hp: 6, look: 'hue-rotate(-75deg) saturate(1.6)' },
+    { name: 'Ruby', emoji: '💎', hp: 6, look: 'hue-rotate(150deg) saturate(2.2)' },
+    { name: 'Diamond', emoji: '💎', hp: 7, look: 'saturate(.25) brightness(1.25)' },
+  ],
+  vocab: [
+    { name: 'Copper ore', emoji: '🟠', hp: 4, color: '#c8743a' },
+    { name: 'Tin ore', emoji: '⚪', hp: 5, color: '#a9b3bc' },
+    { name: 'Iron ore', emoji: '🟤', hp: 5, color: '#7b5a4a' },
+    { name: 'Silver ore', emoji: '⚪', hp: 6, color: '#dfe5ec' },
+    { name: 'Gold ore', emoji: '🟡', hp: 6, color: '#f5c542' },
+    { name: 'Opal', emoji: '🌈', hp: 7, color: 'linear-gradient(180deg, #f9a8d4, #a5b4fc, #86efac)' },
+  ],
+  math: [
+    { name: 'Pebble Stop', emoji: '🪧', hp: 4 },
+    { name: 'Bat Cave', emoji: '🦇', hp: 5 },
+    { name: 'Echo Tunnel', emoji: '🕳️', hp: 5 },
+    { name: 'Crystal Bridge', emoji: '🌉', hp: 6 },
+    { name: 'Lava Falls', emoji: '🌋', hp: 6 },
+    { name: 'Gold Town', emoji: '🏘️', hp: 7 },
+  ],
+};
 
 // Cosmetic unlocks by level. Purely visual.
 export const COSMETICS = [

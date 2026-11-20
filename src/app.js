@@ -1,5 +1,5 @@
 // UI for Spelling Quest. Plain DOM, no framework or build step.
-import { THEMES, ITEMS_BY_ID, POWER_INFO, COSMETICS, MONSTERS, themesOpen, nextTheme, LEGENDS, LEGEND_RULES, GOLD_BONUS } from './content.js';
+import { THEMES, ITEMS_BY_ID, POWER_INFO, COSMETICS, themesOpen, nextTheme, LEGENDS, LEGEND_RULES, GOLD_BONUS } from './content.js';
 import { claimLegends, legendProgress } from './legend.js';
 import { masterySummary, masteryRating, MAX_BOX } from './srs.js';
 import {
@@ -14,6 +14,7 @@ import {
   claimSetRewards, earnedTitles,
 } from './progress.js';
 import { newBattle, applyAnswer, roundOver, hintText, ROUND_LENGTH } from './battle.js';
+import { ACTIVITIES, activityLabel, arenaHtml, zapText, clearedText, missText, animFor, targetsFor, randomStart } from './mine.js';
 import {
   newProfile, addWords, removeWord, migrateProfile, currentWords, activeItems, recordAnswer, checkSpelling,
   pickPracticeWord, entryWarnings, cleanEntries,
@@ -31,7 +32,7 @@ import { initMath } from './mathgame.js';
 import { initFarm } from './farmui.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-21.8';
+const APP_VERSION = '2026-11-21.9';
 const app = document.getElementById('app');
 let data = load();
 // claimLegends also catches sets finished before Legendaries existed.
@@ -254,8 +255,8 @@ const screens = {
           : `<p class="muted">No words yet. Ask a grown-up to add this week's list.</p>`
       }
       <div class="game-pick">
-        <button class="big" data-action="play" ${p.words.length ? '' : 'disabled'}>⚔️ Spelling</button>
-        <button class="big secondary" data-action="go" data-to="math">🔢 Times tables</button>
+        <button class="big" data-action="play" ${p.words.length ? '' : 'disabled'}>${activityLabel('spelling')}</button>
+        <button class="big secondary" data-action="go" data-to="math">${activityLabel('math')}</button>
         ${vocab.hubButton(p)}
         ${farm.hubButton(p)}
       </div>
@@ -278,7 +279,7 @@ const screens = {
           <input class="answer" id="answer" type="text" autocomplete="off" autocorrect="off" autocapitalize="off"
             spellcheck="false" enterkeyhint="go" aria-label="Type the word">
           <div class="feedback" id="play-feedback"></div>
-          <button class="big" id="play-submit" style="width:100%" type="submit">⚡ Zap!</button>
+          <button class="big" id="play-submit" style="width:100%" type="submit">⛏️ Dig!</button>
         </form>
       </div>
       <p class="small muted" style="text-align:center">${teamLineHtml(profile(), 'spelling')}</p>`;
@@ -293,7 +294,7 @@ const screens = {
     return `<h1>Round done! 🎉</h1>
       <div class="card">
         <div class="row" style="font-size:1.3rem;gap:24px">
-          <span>🪙 +${g.earned.coins}</span><span>⭐ +${g.earned.xp} XP</span>${g.earned.sun ? `<span>☀️ +${g.earned.sun}</span>` : ''}<span>👾 ${g.battle.defeated} defeated</span>
+          <span>🪙 +${g.earned.coins}</span><span>⭐ +${g.earned.xp} XP</span>${g.earned.sun ? `<span>☀️ +${g.earned.sun}</span>` : ''}<span>${ACTIVITIES.spelling.count(g.battle.defeated)}</span>
         </div>
         ${
           mastered.length
@@ -566,7 +567,7 @@ const screens = {
         <h3>How rewards work</h3>
         <p>Coins only come from correct answers, never from finishing a round. A word pays by how well it's known:
           ${BOX_COINS.join(', ')} coins from new to mastered, plus ${COMEBACK_BONUS} for getting a recently missed word right.
-          Using a hint pays half. XP (${XP_PER.correct} per correct answer, ${XP_PER.monster} per monster) only unlocks looks in the Locker.</p>
+          Using a hint pays half. XP (${XP_PER.correct} per correct answer, ${XP_PER.monster} per gem, ore bucket or cart station) only unlocks looks in the Locker.</p>
         <p>Coins slow down after a lot of play in one day: the first ${COIN_PACE[0].upTo} coins pay in full, then answers pay half until ${COIN_PACE[1].upTo}, then 1 coin each until ${DAILY_COIN_MAX}, when the coin bag is full until tomorrow. Mastery rewards always pay in full.</p>
         <p>At most ${DAILY_PACK_CAP} packs a day, and each one costs a bit more than the last: ${PACK_COSTS.slice(0, DAILY_PACK_CAP).join(', ')} coins, back to ${PACK_COSTS[0]} the next day. Odds: ${Object.entries(ODDS)
           .map(([k, v]) => `${k} ${Math.round(v * 100)}%`)
@@ -601,15 +602,7 @@ function playTop() {
       <span class="pill">Word ${Math.min(b.asked + (g.phase === 'ask' ? 1 : 0), ROUND_LENGTH)} of ${ROUND_LENGTH}</span>
       <span class="pill">🪙 ${p.coins}</span>
     </div>
-    <div class="arena">
-      <div>${heroHtml(p)}<div class="small muted" style="margin-top:6px">${b.combo >= 2 ? `🔥 ${b.combo} in a row` : '&nbsp;'}</div></div>
-      <div class="zap">${g.zap || ''}</div>
-      <div>
-        <span class="monster ${g.anim || ''}">${g.shownMonster.emoji}</span>
-        <div class="small"><strong>${esc(g.shownMonster.name)}</strong></div>
-        <div class="hp"><div style="width:${(100 * g.shownHp) / g.shownMonster.hp}%"></div></div>
-      </div>
-    </div>`;
+    ${arenaHtml('spelling', { hero: heroHtml(p), combo: b.combo, zap: g.zap, anim: g.anim, target: g.shownMonster, hp: g.shownHp, from: g.from })}`;
 }
 
 function playPrompt() {
@@ -640,7 +633,7 @@ function patchPlay({ clearInput = false } = {}) {
   const fb = document.getElementById('play-feedback');
   fb.textContent = g.feedback || '';
   fb.className = `feedback ${g.feedbackClass || ''}`;
-  document.getElementById('play-submit').textContent = g.phase === 'copy' ? 'Got it' : '⚡ Zap!';
+  document.getElementById('play-submit').textContent = g.phase === 'copy' ? 'Got it' : '⛏️ Dig!';
   const input = document.getElementById('answer');
   input.readOnly = g.phase === 'wait';
   if (clearInput) input.value = '';
@@ -815,7 +808,7 @@ async function startRound() {
     powers,
     friendsBefore: p,
     friendEvents: [],
-    battle: newBattle(powers, Math.floor(Math.random() * MONSTERS.length)),
+    battle: newBattle(powers, randomStart('spelling'), targetsFor('spelling')),
     phase: 'ask',
     recent: [],
     missed: new Set(),
@@ -837,7 +830,7 @@ function nextWord() {
   if (review) g.reviewUsed++;
   g.word = p.words.find((w) => w.id === item.id);
   g.recent = [item.id, ...g.recent].slice(0, Math.min(3, Math.max(0, currentWords(p).length - 1)));
-  Object.assign(g, { phase: 'ask', usedHint: false, typed: '', feedback: review ? '⭐ Review word' : '', feedbackClass: '', zap: '', anim: '' });
+  Object.assign(g, { phase: 'ask', usedHint: false, typed: '', feedback: review ? '⭐ Review word' : '', feedbackClass: '', zap: '', anim: '', from: null });
   g.shownMonster = g.battle.monster;
   g.shownHp = g.battle.hp;
   ui.screen = 'play';
@@ -863,6 +856,7 @@ function submitAnswer(value) {
   const g = ui.game;
   if (g.phase === 'wait' || !value.trim()) return;
   if (g.phase === 'copy') {
+    Object.assign(g, { anim: '', from: null });
     if (checkSpelling(value, g.word.word)) {
       g.phase = 'wait';
       g.feedback = 'Locked in! 🔒';
@@ -891,7 +885,9 @@ function submitAnswer(value) {
 
   const { battle, events } = applyAnswer(g.battle, result, g.powers);
   const defeated = events.find((e) => e.type === 'defeated');
-  // Show the beaten monster at 0 HP until the next word brings the new one.
+  // Show the finished target (gem found) until the next word brings a new rock.
+  g.from = (g.shownMonster.hp - g.shownHp) / g.shownMonster.hp;
+  g.anim = animFor(events);
   g.shownMonster = defeated ? g.battle.monster : battle.monster;
   g.shownHp = defeated ? 0 : battle.hp;
   g.battle = battle;
@@ -905,9 +901,8 @@ function submitAnswer(value) {
   if (correct) {
     const hit = events.find((e) => e.type === 'hit');
     g.phase = 'wait';
-    g.zap = `💥${hit.damage > 1 ? ` ×${hit.damage}` : ''}`;
-    g.anim = defeated ? 'down' : 'hit';
-    g.feedback = defeated ? `You beat ${defeated.monster.name}! ${defeated.monster.emoji}` : ['Nice!', 'Yes!', 'Great spelling!', 'Boom!'][Math.floor(Math.random() * 4)];
+    g.zap = zapText('spelling', hit.damage);
+    g.feedback = defeated ? clearedText('spelling', defeated.monster) : ['Nice!', 'Yes!', 'Great spelling!', 'Clink!'][Math.floor(Math.random() * 4)];
     if (rec.starWaits && !defeated) g.feedback += ' Next ⭐ for this word tomorrow.';
     if (rec.mastered) {
       g.mastered.push(g.word.id);
@@ -923,7 +918,7 @@ function submitAnswer(value) {
     g.phase = 'copy';
     g.typed = value.trim();
     g.zap = '';
-    g.feedback = events.some((e) => e.type === 'shielded') ? '🛡️ Your shield stopped the monster from healing.' : 'Close! Let\'s learn this one.';
+    g.feedback = missText('spelling', events);
     g.feedbackClass = 'bad';
     render({ clearInput: true });
     sayWord(g.word.word);
