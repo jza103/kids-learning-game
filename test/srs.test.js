@@ -82,7 +82,33 @@ test('masterySummary buckets words', () => {
   const items = [
     newItem('a', T0),
     { ...newItem('b', T0), seen: 1, box: 1 },
-    { ...newItem('c', T0), seen: 9, box: MAX_BOX },
+    { ...newItem('c', T0), seen: 9, box: MAX_BOX, dueAt: T0 + 1e9 },
+    { ...newItem('d', T0), seen: 9, box: MAX_BOX, dueAt: T0 - 1 },
   ];
-  assert.deepEqual(masterySummary(items), { new: 1, learning: 1, mastered: 1 });
+  assert.deepEqual(masterySummary(items, T0), { new: 1, learning: 1, mastered: 1, refresh: 1 });
+});
+
+test('mastered items need a refresh later; each refresh waits longer; problem items come back sooner', async () => {
+  const { needsRefresh, refreshInterval, REFRESH_DAYS, PROBLEM_MISSES } = await import('../src/srs.js');
+  const DAY = 24 * 3600e3;
+  let item = { ...newItem('w', T0), box: MAX_BOX - 1, seen: 4, correct: 4 };
+  item = review(item, 'correct', T0);
+  assert.equal(item.box, MAX_BOX);
+  assert.equal(item.dueAt, T0 + REFRESH_DAYS[0] * DAY);
+  assert.ok(!needsRefresh(item, T0 + DAY));
+  const later = item.dueAt + 1;
+  assert.ok(needsRefresh(item, later));
+  assert.ok(weightFor(item, later) > weightFor({ ...item, box: 3 }, later), 'refreshes come up more than strong words');
+  // Answering early doesn't count as a refresh.
+  assert.equal(review(item, 'correct', T0 + DAY).refreshes || 0, 0);
+  const refreshed = review(item, 'correct', later);
+  assert.equal(refreshed.refreshes, 1);
+  assert.equal(refreshed.dueAt, later + REFRESH_DAYS[1] * DAY);
+  assert.ok(!needsRefresh(refreshed, later + DAY));
+  const problem = { ...item, misses: PROBLEM_MISSES };
+  assert.equal(refreshInterval(problem), refreshInterval(item) / 2);
+  // A miss on a mastered word sends it back to the start (mastery reward is kept).
+  const missed = review(item, 'wrong', later);
+  assert.equal(missed.box, 0);
+  assert.equal(missed.masteredAt, item.masteredAt);
 });

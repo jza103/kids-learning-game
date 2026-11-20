@@ -4,6 +4,7 @@
 // functions are pure: they take a profile and return a new one.
 import { newItem, review, pickNext } from './srs.js';
 import { coinsForAnswer, earnCoins, rewardMastery } from './economy.js';
+import { claimLegends } from './legend.js';
 import { XP_PER, applyXpBoost } from './progress.js';
 import { normalize } from './profile.js';
 import { STARTER_VOCAB } from './vocab-words.js';
@@ -158,6 +159,10 @@ export function recordMatch(profile, id, result, now, powers = { xp: 0 }) {
     xp: profile.xp + xp,
     vocabStats: { answered: stats.answered + 1, correct: stats.correct + (result === 'correct' ? 1 : 0) },
   };
-  if (mastered) next = rewardMastery(next);
-  return { profile: next, coins, xp, mastered };
+  let legends = [];
+  if (mastered) {
+    next = rewardMastery(next);
+    ({ profile: next, newly: legends } = claimLegends(next));
+  }
+  return { profile: next, coins, xp, mastered, legends };
 }

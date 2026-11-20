@@ -15,6 +15,25 @@ export const NOT_DUE_WEIGHT = 0.25;
 export const MISS_BOOST_PER_MISS = 0.5;
 export const MISS_BOOST_CAP = 4;
 
+// --- Mastery refresh ---
+// A mastered item (top box) comes back after a while and needs a "refresh":
+// until it's answered right again it shows 4 stars and a 🔄. Each refresh
+// pushes the next one further out. Items that were once a problem (missed
+// PROBLEM_MISSES+ times) come back twice as soon.
+export const REFRESH_DAYS = [7, 14, 30, 60];
+export const PROBLEM_MISSES = 2;
+export const REFRESH_WEIGHT = 5;
+
+export function refreshInterval(item) {
+  const days = REFRESH_DAYS[Math.min(item.refreshes || 0, REFRESH_DAYS.length - 1)];
+  return (item.misses >= PROBLEM_MISSES ? days / 2 : days) * DAY;
+}
+
+/** A mastered item whose refresh is due. */
+export function needsRefresh(item, now = Date.now()) {
+  return Boolean(item) && item.box >= MAX_BOX && item.dueAt <= now;
+}
+
 export function newItem(id, now) {
   return { id, box: 0, dueAt: now, seen: 0, correct: 0, misses: 0, lastResult: null, masteredAt: null };
 }
@@ -35,7 +54,8 @@ export function review(item, result, now) {
     next.box = 0;
     next.misses = item.misses + 1;
   }
-  next.dueAt = result === 'correct' ? now + INTERVALS[next.box] : now + INTERVALS[0];
+  if (result === 'correct' && item.box >= MAX_BOX && item.dueAt <= now) next.refreshes = (item.refreshes || 0) + 1;
+  next.dueAt = result !== 'correct' ? now + INTERVALS[0] : next.box >= MAX_BOX ? now + refreshInterval(next) : now + INTERVALS[next.box];
   // First time reaching the top box. Kept even if the word slips later, so
   // mastery rewards are paid once per word.
   next.masteredAt = item.masteredAt ?? (next.box >= MAX_BOX ? now : null);
@@ -54,6 +74,7 @@ export function isDue(item, now) {
 export function weightFor(item, now) {
   if (item.seen === 0) return NEW_WEIGHT;
   if (!isDue(item, now)) return NOT_DUE_WEIGHT;
+  if (needsRefresh(item, now)) return REFRESH_WEIGHT * (item.misses >= PROBLEM_MISSES ? 1.5 : 1);
   const missBoost = 1 + Math.min(item.misses, MISS_BOOST_CAP) * MISS_BOOST_PER_MISS;
   return BOX_WEIGHT[item.box] * missBoost;
 }
@@ -70,18 +91,20 @@ export function pickNext(items, now, rng = Math.random, recent = []) {
 }
 
 /** 0-5 star mastery rating (the current box) and a label for it. */
-export function masteryRating(item) {
+export function masteryRating(item, now = Date.now()) {
+  if (needsRefresh(item, now)) return { stars: MAX_BOX - 1, label: 'Needs a refresh', refresh: true };
   const stars = item ? item.box : 0;
   let label = 'New';
   if (item && item.seen > 0) label = stars >= MAX_BOX ? 'Mastered' : stars >= 3 ? 'Strong' : 'Learning';
-  return { stars, label };
+  return { stars, label, refresh: false };
 }
 
 /** Summary used on the parent screen. */
-export function masterySummary(items) {
-  const out = { new: 0, learning: 0, mastered: 0 };
+export function masterySummary(items, now = Date.now()) {
+  const out = { new: 0, learning: 0, mastered: 0, refresh: 0 };
   for (const i of items) {
     if (i.seen === 0) out.new++;
+    else if (needsRefresh(i, now)) out.refresh++;
     else if (isMastered(i)) out.mastered++;
     else out.learning++;
   }

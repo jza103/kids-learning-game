@@ -1,5 +1,6 @@
 // UI for Spelling Quest. Plain DOM, no framework or build step.
-import { THEMES, ITEMS_BY_ID, POWER_INFO, COSMETICS, MONSTERS } from './content.js';
+import { THEMES, ITEMS_BY_ID, POWER_INFO, COSMETICS, MONSTERS, themesOpen, nextTheme, LEGENDS, LEGEND_RULES, GOLD_BONUS } from './content.js';
+import { claimLegends, legendProgress } from './legend.js';
 import { masterySummary, masteryRating, MAX_BOX } from './srs.js';
 import {
   BOX_COINS, COMEBACK_BONUS, PACK_COSTS, packCost, coinPaceNote, COIN_PACE, DAILY_COIN_MAX, DAILY_PACK_CAP, ODDS, CRAFT_COST, SHARDS_FOR_DUPLICATE,
@@ -30,7 +31,8 @@ import { initMath } from './mathgame.js';
 const APP_VERSION = '2026-11-20.4';
 const app = document.getElementById('app');
 let data = load();
-for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
+// claimLegends also catches sets finished before Legendaries existed.
+for (const id of Object.keys(data.profiles)) data.profiles[id] = claimLegends(migrateProfile(data.profiles[id])).profile;
 data.settings = { voiceURI: null, rate: 0.85, ...(data.settings || {}) };
 data.settings.ai = { enabled: false, voiceId: null, voiceName: null, ...(data.settings.ai || {}) };
 applySpeech();
@@ -72,6 +74,8 @@ function update(p) {
 }
 function go(screen) {
   if (ui.pendingReload) return location.reload();
+  // Visiting the Collection counts as having seen new Legendaries.
+  if (screen === 'book' && profile()?.legendsNew?.length) update({ ...profile(), legendsNew: [] });
   ui.screen = screen;
   ui.flash = '';
   render();
@@ -101,18 +105,57 @@ function topbar(title) {
 
 function collectibleCard(item, { owned = true, extra = '', cls = '' } = {}) {
   const spec = GAME_TYPES[item.specialty];
-  return `<div class="collectible ${owned ? '' : 'missing'} ${cls}">
+  const gold = owned && profile()?.gold?.[item.id];
+  return `<div class="collectible ${owned ? '' : 'missing'} ${gold ? 'gold' : ''} ${item.rarity === 'legendary' ? 'legendary' : ''} ${cls}">
     <div class="art">${item.emoji}</div>
     <div><strong>${owned ? esc(item.name) : '???'}</strong></div>
-    <div class="rarity ${item.rarity}">${item.rarity}</div>
+    <div class="rarity ${item.rarity}">${gold ? '✨ gold ' : ''}${item.rarity}</div>
     ${owned ? friendDetailsHtml(profile(), item.id) : `<div class="small muted">${spec.emoji} ${spec.name} friend</div>`}
     ${extra}
   </div>`;
 }
 
 function starsHtml(item) {
-  const { stars, label } = masteryRating(item);
-  return `<span class="stars" title="${label}">${'★'.repeat(stars)}<span class="off">${'★'.repeat(MAX_BOX - stars)}</span></span>`;
+  const { stars, label, refresh } = masteryRating(item);
+  return `<span class="stars" title="${label}">${'★'.repeat(stars)}<span class="off">${'★'.repeat(MAX_BOX - stars)}</span>${refresh ? ' 🔄' : ''}</span>`;
+}
+
+function legendNewsHtml(p) {
+  const fresh = (p.legendsNew || []).map((id) => ITEMS_BY_ID[id]).filter(Boolean);
+  if (!fresh.length) return '';
+  return `<div class="card super-card"><h3>🏆 New Legendary friend${fresh.length > 1 ? 's' : ''}!</h3>
+    <p style="font-size:2.4rem;margin:4px 0">${fresh.map((l) => l.emoji).join(' ')}</p>
+    <p>${fresh.map((l) => `<strong>${esc(l.name)}</strong> (${esc(legendHow(l))})`).join(', ')}</p>
+    <button class="super" data-action="go" data-to="book">See them in your Collection</button></div>`;
+}
+
+function legendHow(l) {
+  if (l.track === 'math') return `every ${l.table}s × and ÷ fact mastered`;
+  if (l.track === 'spelling') return `${LEGEND_RULES.weekStars} Week Stars`;
+  return `${LEGEND_RULES.vocabWords} Word Match words mastered`;
+}
+
+function legendsHtml(p) {
+  const lp = legendProgress(p);
+  const card = (l) => collectibleCard(l, {
+    owned: Boolean(p.collection[l.id]),
+    cls: p.team.includes(l.id) ? 'on-team' : '',
+    extra: p.collection[l.id]
+      ? `<button class="${p.team.includes(l.id) ? '' : 'secondary'}" data-action="toggle-team" data-id="${l.id}">${p.team.includes(l.id) ? 'On team ✓' : 'Add to team'}</button>`
+      : `<div class="small muted" style="margin-top:8px">${esc(legendHow(l))}</div>`,
+  });
+  const nextOf = (track) => LEGENDS.filter((l) => l.track === track && !p.collection[l.id]).slice(0, 1);
+  const owned = (track) => LEGENDS.filter((l) => l.track === track && p.collection[l.id]);
+  const titans = LEGENDS.filter((l) => l.track === 'math');
+  return `<div class="card">
+    <div class="row spread"><h3>🏆 Legendary</h3><span class="pill">${LEGENDS.filter((l) => p.collection[l.id]).length} earned</span></div>
+    <p class="small muted">The strongest friends. They never come from packs: you earn them by finishing a whole set.</p>
+    <p><strong>✏️ Spelling:</strong> ⭐ ${lp.weekStars} Week Star${lp.weekStars === 1 ? '' : 's'}. Master every word on a week's list for a star; ${lp.starsToNext} more for the next Legendary.</p>
+    <p><strong>📚 Word Match:</strong> ${lp.vocab} words mastered; ${lp.vocabToNext} more for the next Legendary.</p>
+    <p><strong>✖️ Times tables:</strong> a Table Titan for each table from 3 to 12 when every × and ÷ fact is mastered.
+      ${lp.tables.map((t) => `<span class="pill small">${t.table}s ${t.mastered}/${t.total}</span>`).join(' ')}</p>
+    <div class="grid">${[...owned('spelling'), ...nextOf('spelling'), ...owned('vocab'), ...nextOf('vocab'), ...titans].map(card).join('')}</div>
+  </div>`;
 }
 
 function superProgressHtml(p) {
@@ -178,6 +221,7 @@ const screens = {
         <button class="big secondary" data-action="go" data-to="math">🔢 Times tables</button>
         ${vocab.hubButton(p)}
       </div>
+      ${legendNewsHtml(p)}
       <div class="card">${superProgressHtml(p)}</div>
       <div class="menu">
         <button class="secondary" data-action="go" data-to="packs"><span class="icon">🎁</span>Packs</button>
@@ -241,7 +285,8 @@ const screens = {
     const now = Date.now();
     const left = packsLeftToday(p, now);
     const check = canOpenPack(p, now);
-    const theme = THEMES.find((t) => t.id === ui.packTheme) || THEMES[0];
+    const open = themesOpen(now);
+    const theme = open.find((t) => t.id === ui.packTheme) || open[0];
     const pity = pityStatus(p.packs);
     const r = ui.reveal;
     return `${topbar('Packs')}
@@ -251,7 +296,9 @@ const screens = {
           : r
           ? `<div class="reveal"><div class="flip">${collectibleCard(r.item, {
               cls: r.super ? 'ultra-glow' : '',
-              extra: r.duplicate
+              extra: r.gold
+                ? `<p><strong>✨ Gold version!</strong><br>Gold friends get +${GOLD_BONUS} power.</p>`
+                : r.duplicate
                 ? `<p><strong>You already have this one!</strong><br>+${r.shards} 💎 shards</p>`
                 : '<p><strong>New friend!</strong></p>',
             })}</div></div>`
@@ -260,14 +307,14 @@ const screens = {
       ${
         p.superPacks
           ? `<div class="card super-card"><h3>🌟 You have ${p.superPacks} Super Pack${p.superPacks > 1 ? 's' : ''}!</h3>
-             <p>You earned ${p.superPacks > 1 ? 'these' : 'this'} by mastering words. A Super Pack always has an <strong class="rarity ultra">ultra</strong> friend from the theme you pick, and doesn't count toward today's packs.</p>
+             <p>You earned ${p.superPacks > 1 ? 'these' : 'this'} by mastering. A Super Pack gives an <strong class="rarity ultra">ultra</strong> friend from the theme you pick. Once you have that theme's ultras, it turns one of your rare, epic or ultra friends <strong>✨ gold</strong> (+${GOLD_BONUS} power) instead. It doesn't count toward today's packs.</p>
              <button class="big super" data-action="open-super">Open ${theme.emoji} Super Pack</button></div>`
           : `<div class="card">${superProgressHtml(p)}<p class="small muted">Ultra friends only come from Super Packs. Master ${SUPER_PACK_EVERY} words to earn one.</p></div>`
       }
       <div class="card">
         <h3>Pick a theme</h3>
         <div class="grid">
-          ${THEMES.map((t) => {
+          ${open.map((t) => {
             const tp = themeProgress(t, p.collection);
             return `<button class="theme-pick ${t.id === theme.id ? 'selected' : ''}" data-action="pack-theme" data-id="${t.id}">
               <span class="icon">${t.emoji}</span>${t.name}<div class="small muted">${tp.owned}/${tp.total}${tp.complete ? ' ✓' : ''}</div></button>`;
@@ -293,7 +340,7 @@ const screens = {
         </table>
         <p>Rare or better guaranteed within <strong>${pity.rareIn}</strong> pack${pity.rareIn === 1 ? '' : 's'}.
            Epic guaranteed within <strong>${pity.epicIn}</strong>.</p>
-        <p class="muted">Shards let you pick any missing friend in your Collection, except ultras. Ultras only come from Super Packs (100% ultra), earned by mastering words.</p>
+        <p class="muted">Shards let you pick any missing common, rare or epic friend in your Collection. Ultras and gold versions only come from Super Packs, and Legendaries only from finishing a whole set, so the best friends always take mastering.</p>
       </div>`;
   },
 
@@ -314,7 +361,9 @@ const screens = {
         <div class="small" style="margin-top:8px">${powerLines}</div>
       </div>
       ${friendsHelpHtml()}
-      ${THEMES.map((t) => {
+      ${legendsHtml(p)}
+      ${nextTheme() ? `<div class="card"><h3>${nextTheme().emoji} ${esc(nextTheme().name)}: coming ${new Date(nextTheme().from + 'T12:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</h3><p class="small muted">A new theme with 12 new friends arrives every month.</p></div>` : ''}
+      ${themesOpen().map((t) => {
         const tp = themeProgress(t, p.collection);
         return `<div class="card">
           <div class="row spread"><h3>${t.emoji} ${t.name}</h3><span class="pill">${tp.owned}/${tp.total}${tp.complete ? ` · 🏅 ${esc(t.reward)}` : ''}</span></div>
@@ -483,7 +532,9 @@ const screens = {
           Missing friends always come before duplicates, duplicates become shards, and shards can make any missing friend except ultras.
           Nothing in the app costs money.</p>
         <p><strong>The big rewards come from mastering words.</strong> The first time a word reaches ${MAX_BOX} stars it pays ${MASTERY_COINS} coins and ${XP_PER.mastered} XP,
-          and every ${SUPER_PACK_EVERY} mastered words earn a Super Pack: a guaranteed ultra friend (not limited by the daily cap). Ultra friends can't be bought with coins or shards, so finishing the collection takes mastering words.</p>
+          and every ${SUPER_PACK_EVERY} mastered words earn a Super Pack: an ultra friend, or once a theme's ultras are owned, a ✨ gold version (+${GOLD_BONUS} power) of a rare, epic or ultra friend (not limited by the daily cap). Ultras and gold versions can't be bought with coins or shards.</p>
+        <p><strong>🏆 Legendary friends</strong> only come from finishing a whole set: a Table Titan for each times table from 3 to 12 (every × and ÷ fact mastered), one for every ${LEGEND_RULES.weekStars} Week Stars (a Week Star = every word on that week's list mastered, at least ${LEGEND_RULES.minWeekWords} words), and one for every ${LEGEND_RULES.vocabWords} mastered Word Match words.</p>
+        <p><strong>🔄 Refresh:</strong> mastered words and facts come back after 7 days, then 14, 30 and 60 (half as long for ones that were missed a couple of times). Until they're answered right again they show 4 stars and 🔄. Mastery rewards are only paid once. A new theme with 12 friends arrives each month through June.</p>
       </div>
       <div class="card">
         <h3>Backup</h3>
@@ -915,7 +966,7 @@ const actions = {
     render();
   },
   'open-super': () => {
-    const themeId = ui.packTheme || THEMES[0].id;
+    const themeId = themesOpen().some((t) => t.id === ui.packTheme) ? ui.packTheme : themesOpen()[0].id;
     const { profile: p1, result } = openSuperPack(profile(), themeId);
     const { profile: p2, newly } = claimSetRewards(p1);
     update(p2);
@@ -988,7 +1039,7 @@ const actions = {
     render();
   },
   'open-pack': () => {
-    const themeId = ui.packTheme || THEMES[0].id;
+    const themeId = themesOpen().some((t) => t.id === ui.packTheme) ? ui.packTheme : themesOpen()[0].id;
     const { profile: p1, result } = openPack(profile(), themeId, Date.now());
     const { profile: p2, newly } = claimSetRewards(p1);
     update(p2);

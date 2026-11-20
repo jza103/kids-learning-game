@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { newProfile, parseWordList, addWords, currentWords, activeItems, recordAnswer, pickPracticeWord, migrateProfile, removeWord, entryWarnings, cleanEntries, MAX_REVIEW_PER_ROUND } from '../src/profile.js';
 import { review, MAX_BOX, masteryRating, INTERVALS } from '../src/srs.js';
 import { rewardMastery, openSuperPack, craft, MASTERY_COINS, SUPER_PACK_EVERY, SUPER_PACK_SHARDS, openPack, PACK_COST } from '../src/economy.js';
-import { THEMES, ALL_ITEMS } from '../src/content.js';
+import { THEMES, ALL_ITEMS, themesOpen, nextTheme, GOLD_RARITIES, GOLD_BONUS } from '../src/content.js';
+import { friendInfo } from '../src/friends.js';
 import { XP_PER } from '../src/progress.js';
 import { mulberry32 } from '../src/rng.js';
 import { scoreVoice, bestVoice, rankVoices } from '../src/voices.js';
@@ -66,11 +67,13 @@ test('word entry tips catch sentences that will read badly', () => {
 
 test('mastery rating follows the box', () => {
   let p = addWords(newProfile('A', T0), parseWordList('cat'), T0).profile;
-  assert.deepEqual(masteryRating(p.srs.cat), { stars: 0, label: 'New' });
+  assert.deepEqual(masteryRating(p.srs.cat, T0), { stars: 0, label: 'New', refresh: false });
   p = recordAnswer(p, 'cat', 'correct', T0).profile;
-  assert.deepEqual(masteryRating(p.srs.cat), { stars: 1, label: 'Learning' });
-  p = masterWord(p, 'cat', p.srs.cat.dueAt).profile;
-  assert.equal(masteryRating(p.srs.cat).label, 'Mastered');
+  assert.deepEqual(masteryRating(p.srs.cat, T0), { stars: 1, label: 'Learning', refresh: false });
+  const m = masterWord(p, 'cat', p.srs.cat.dueAt);
+  p = m.profile;
+  assert.equal(masteryRating(p.srs.cat, m.now - 1).label, 'Mastered');
+  assert.deepEqual(masteryRating(p.srs.cat, m.now), { stars: MAX_BOX - 1, label: 'Needs a refresh', refresh: true });
 });
 
 test('mastering a word pays coins, XP and Super Pack progress exactly once', () => {
@@ -95,35 +98,53 @@ test('every SUPER_PACK_EVERY mastered words earns a Super Pack', () => {
   assert.equal(p.coins, MASTERY_COINS * (SUPER_PACK_EVERY * 2 + 1));
 });
 
-test('a Super Pack always gives an ultra until they are all owned, then shards', () => {
-  const ultras = ALL_ITEMS.filter((i) => i.rarity === 'ultra');
-  let p = { ...newProfile('A', T0), superPacks: ultras.length + 1 };
+test('Super Packs: the theme\'s ultras, then gold versions there, then other ultras, then gold anywhere, then friends', () => {
+  const open = themesOpen(T0);
+  const openUltras = open.flatMap((t) => t.items).filter((i) => i.rarity === 'ultra');
+  assert.equal(openUltras.length, 10, 'only themes open on T0 count');
+  let p = { ...newProfile('A', T0), superPacks: 100 };
   const rng = mulberry32(5);
-  const got = new Set();
-  for (let i = 0; i < ultras.length; i++) {
-    const { profile, result } = openSuperPack(p, 'ocean', rng);
-    p = profile;
-    assert.equal(result.item.rarity, 'ultra');
-    assert.ok(!got.has(result.item.id), 'no duplicate ultras');
-    got.add(result.item.id);
-  }
-  // The theme's own ultras come first.
+  const take = () => {
+    const r = openSuperPack(p, 'ocean', rng, T0);
+    p = r.profile;
+    return r.result;
+  };
   const oceanUltras = THEMES[0].items.filter((i) => i.rarity === 'ultra').map((i) => i.id);
-  assert.ok(oceanUltras.every((id) => [...got].slice(0, oceanUltras.length).includes(id)));
-  // Next: a missing ocean friend (not ultra).
-  const { profile, result } = openSuperPack(p, 'ocean', rng);
-  assert.equal(result.item.theme ?? 'ocean', 'ocean');
-  assert.notEqual(result.item.rarity, 'ultra');
-  assert.equal(profile.superPacks, 0);
-  assert.throws(() => openSuperPack(profile, 'ocean', rng), /no super packs/);
+  const first = [take(), take()];
+  assert.deepEqual(first.map((r) => r.item.id).sort(), [...oceanUltras].sort());
+  const golds = [take(), take()];
+  assert.ok(golds.every((r) => r.gold && oceanUltras.includes(r.item.id)), 'then the ocean ultras turn gold');
+  const others = Array.from({ length: 8 }, take);
+  assert.ok(others.every((r) => !r.gold && r.item.rarity === 'ultra' && r.item.theme !== 'ocean'));
+  const moreGold = Array.from({ length: 8 }, take);
+  assert.ok(moreGold.every((r) => r.gold && r.item.rarity === 'ultra'));
+  const friend = take();
+  assert.equal(friend.item.theme, 'ocean');
+  assert.notEqual(friend.item.rarity, 'ultra');
+  assert.ok(!friend.gold);
+  assert.ok(openUltras.every((i) => p.gold[i.id] && p.collection[i.id]));
 });
 
-test('a Super Pack gives shards once the whole collection is done', () => {
-  const all = Object.fromEntries(ALL_ITEMS.map((i) => [i.id, 1]));
-  const p = { ...newProfile('A', T0), superPacks: 1, collection: all };
-  const { profile, result } = openSuperPack(p, 'space', () => 0);
+test('gold versions add power; a Super Pack gives shards once everything is owned and gold', () => {
+  const open = themesOpen(T0).flatMap((t) => t.items);
+  const all = Object.fromEntries(open.map((i) => [i.id, 1]));
+  const gold = Object.fromEntries(open.filter((i) => GOLD_RARITIES.includes(i.rarity)).map((i) => [i.id, true]));
+  const p = { ...newProfile('A', T0), superPacks: 1, collection: all, gold };
+  const { profile, result } = openSuperPack(p, 'space', () => 0, T0);
   assert.equal(result.item, null);
   assert.equal(profile.shards, SUPER_PACK_SHARDS);
+  const ultra = open.find((i) => i.rarity === 'ultra');
+  assert.equal(friendInfo(p, ultra.id).strength, friendInfo({ ...p, gold: {} }, ultra.id).strength + GOLD_BONUS);
+});
+
+test('future themes stay hidden until their month', () => {
+  const winter = THEMES.find((t) => t.id === 'winter');
+  assert.ok(!themesOpen(T0).includes(winter));
+  assert.ok(themesOpen(new Date(2026, 11, 1, 8).getTime()).includes(winter));
+  assert.equal(nextTheme(T0).id, 'winter');
+  const p = { ...newProfile('A', T0), coins: 1000 };
+  assert.throws(() => openPack(p, 'winter', T0), /not yet open/);
+  assert.throws(() => openSuperPack({ ...p, superPacks: 1 }, 'winter', Math.random, T0), /not yet open/);
 });
 
 test('ultras never come from normal packs and cannot be crafted', () => {

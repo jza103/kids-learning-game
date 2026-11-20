@@ -1,7 +1,7 @@
 // Offline support: precache the app shell, then serve from cache and refresh
 // the cache in the background (stale-while-revalidate), so updates show up on
 // the next launch. Bump VERSION when adding or removing files.
-const VERSION = 'v16';
+const VERSION = 'v17';
 const CACHE = `spelling-${VERSION}`;
 const SHELL = [
   './',
@@ -15,6 +15,7 @@ const SHELL = [
   './src/battle.js',
   './src/content.js',
   './src/economy.js',
+  './src/legend.js',
   './src/profile.js',
   './src/progress.js',
   './src/rng.js',

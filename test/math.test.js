@@ -94,11 +94,16 @@ test('slow or hinted answers keep the star count and pay half; wrong resets', ()
   assert.equal(wrong.profile.math.srs['d56/8'].box, 0);
 });
 
-test('repeating a fact before it is due pays little and adds no star', () => {
-  const p = recordFact(kid(), 'm3x4', 'correct', { now: T0 }).profile;
+test('repeating a fact before it is due still adds a star (no waiting) but pays little', () => {
+  let p = recordFact(kid(), 'm3x4', 'correct', { now: T0 }).profile;
   const again = recordFact(p, 'm3x4', 'correct', { now: T0 + 1000 });
   assert.equal(again.coins, NOT_DUE_COINS);
-  assert.equal(again.profile.math.srs.m3x4.box, 1);
+  assert.equal(again.profile.math.srs.m3x4.box, 2);
+  // A kid can master a fact in one sitting.
+  p = again.profile;
+  for (let i = 0; i < 3; i++) p = recordFact(p, 'm3x4', 'correct', { now: T0 + 2000 + i }).profile;
+  assert.equal(p.math.srs.m3x4.box, MAX_BOX);
+  assert.ok(p.math.srs.m3x4.masteredAt != null);
 });
 
 test('mastering facts pays once and every few facts step toward a Super Pack', () => {
