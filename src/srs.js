@@ -56,7 +56,10 @@ export function review(item, result, now, { daily = true } = {}) {
   if (result === 'correct' && waitForTomorrow) {
     // Already earned a star today: right answers still count, the star waits.
     next.correct = item.correct + 1;
-    next.dueAt = Math.max(item.dueAt, now + INTERVALS[0]);
+    // Not due again until tomorrow, so the rest of today's play goes to other words.
+    const tomorrow = new Date(now);
+    tomorrow.setHours(24, 0, 0, 0);
+    next.dueAt = Math.max(item.dueAt, tomorrow.getTime());
     return next;
   }
   if (result === 'correct') {
