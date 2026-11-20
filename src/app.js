@@ -1,5 +1,5 @@
 // UI for Spelling Quest. Plain DOM, no framework or build step.
-import { THEMES, ITEMS_BY_ID, POWER_INFO, RARITY_STRENGTH, COSMETICS, MONSTERS } from './content.js';
+import { THEMES, ITEMS_BY_ID, POWER_INFO, COSMETICS, MONSTERS } from './content.js';
 import { masterySummary, masteryRating, MAX_BOX } from './srs.js';
 import {
   BOX_COINS, COMEBACK_BONUS, PACK_COST, DAILY_PACK_CAP, ODDS, CRAFT_COST, SHARDS_FOR_DUPLICATE,
@@ -7,7 +7,7 @@ import {
   MASTERY_COINS, SUPER_PACK_EVERY, openSuperPack,
 } from './economy.js';
 import {
-  XP_PER, TEAM_SIZE, teamPowers, levelProgress, levelForXp, unlockedCosmetics, applyXpBoost,
+  XP_PER, TEAM_SIZE, levelProgress, levelForXp, unlockedCosmetics, applyXpBoost,
   claimSetRewards, earnedTitles,
 } from './progress.js';
 import { newBattle, applyAnswer, roundOver, hintText, ROUND_LENGTH } from './battle.js';
@@ -19,9 +19,12 @@ import { load, save, requestPersistence, exportBackup, parseBackup } from './sto
 import { sayWord, saySentence, speechAvailable, setSpeechPrefs, englishVoices, currentVoice, onVoicesChanged, unlockAudio, preloadSpeech, sayBuiltIn } from './speech.js';
 import { getKey, setKey, listVoicesOrDefaults, prepareClips, countReady, clipSpecs, clipsForWord, sentenceClip, pruneClips, charCount, clearClips, generateClip } from './aivoice.js';
 import { voiceQuality } from './voices.js';
+import { teamPowersFor, friendsAfterAnswer } from './friends.js';
+import { friendDetailsHtml, teamLineHtml, friendSummaryHtml, friendsHelpHtml } from './friendsui.js';
+import { GAME_TYPES, GAME_TYPE_IDS } from './games.js';
 
 // Shown on the grown-ups screen so you can tell an update has arrived.
-const APP_VERSION = '2026-11-19.7';
+const APP_VERSION = '2026-11-20.1';
 const app = document.getElementById('app');
 let data = load();
 for (const id of Object.keys(data.profiles)) data.profiles[id] = migrateProfile(data.profiles[id]);
@@ -78,12 +81,12 @@ function topbar(title) {
 }
 
 function collectibleCard(item, { owned = true, extra = '', cls = '' } = {}) {
-  const strength = RARITY_STRENGTH[item.rarity];
+  const spec = GAME_TYPES[item.specialty];
   return `<div class="collectible ${owned ? '' : 'missing'} ${cls}">
     <div class="art">${item.emoji}</div>
     <div><strong>${owned ? esc(item.name) : '???'}</strong></div>
     <div class="rarity ${item.rarity}">${item.rarity}</div>
-    ${owned ? `<div class="small muted">${POWER_INFO[item.power].label}: ${POWER_INFO[item.power].describe(strength)}</div>` : ''}
+    ${owned ? friendDetailsHtml(profile(), item.id) : `<div class="small muted">${spec.emoji} ${spec.name} friend</div>`}
     ${extra}
   </div>`;
 }
@@ -171,11 +174,7 @@ const screens = {
           <button class="big" id="play-submit" style="width:100%" type="submit">⚡ Zap!</button>
         </form>
       </div>
-      <p class="small muted" style="text-align:center">Team: ${
-        profile().team.length
-          ? profile().team.map((id) => ITEMS_BY_ID[id]?.emoji).join(' ')
-          : 'none yet. Add friends from your collection for powers!'
-      }</p>`;
+      <p class="small muted" style="text-align:center">${teamLineHtml(profile(), 'spelling')}</p>`;
   },
 
   summary() {
@@ -203,6 +202,7 @@ const screens = {
              <p class="small muted">These will come back more often, and pay extra coins when you get them right.</p></div>`
           : ''
       }
+      ${friendSummaryHtml(g.friendsBefore, p, g.friendEvents)}
       <div class="row">
         <button class="big" data-action="play">Play again</button>
         <button class="big secondary" data-action="go" data-to="packs">🎁 Packs</button>
@@ -272,18 +272,21 @@ const screens = {
 
   book() {
     const p = profile();
-    const powers = teamPowers(p.team);
-    const powerLine = Object.entries(powers)
-      .filter(([, n]) => n)
-      .map(([k, n]) => `${POWER_INFO[k].label}: ${POWER_INFO[k].describe(n)}`)
-      .join(' · ');
+    const powerLines = GAME_TYPE_IDS.map((g) => {
+      const line = Object.entries(teamPowersFor(p, g))
+        .filter(([, n]) => n)
+        .map(([k, n]) => `${POWER_INFO[k].label}: ${POWER_INFO[k].describe(n)}`)
+        .join(' · ');
+      return `<div>${GAME_TYPES[g].emoji} <strong>${GAME_TYPES[g].name}:</strong> ${line || '<span class="muted">no powers yet</span>'}</div>`;
+    }).join('');
     return `${topbar('Collection')}
       <div class="card">
         <h3>Your team (${p.team.length}/${TEAM_SIZE})</h3>
-        <p class="muted small">Friends on your team give you powers in battle. Tap a friend you own to add or remove it.</p>
+        <p class="muted small">Friends on your team give you powers in the games they know, and grow when you play. Tap a friend you own to add or remove it.</p>
         <div style="font-size:2.4rem">${p.team.map((id) => ITEMS_BY_ID[id]?.emoji).join(' ') || '—'}</div>
-        ${powerLine ? `<p><strong>${powerLine}</strong></p>` : ''}
+        <div class="small" style="margin-top:8px">${powerLines}</div>
       </div>
+      ${friendsHelpHtml()}
       ${THEMES.map((t) => {
         const tp = themeProgress(t, p.collection);
         return `<div class="card">
@@ -667,9 +670,11 @@ async function startRound() {
   const p = profile();
   if (!p.words.length) return go('hub');
   await preloadSpeech(clipSpecs([p]));
-  const powers = teamPowers(p.team);
+  const powers = teamPowersFor(p, 'spelling');
   ui.game = {
     powers,
+    friendsBefore: p,
+    friendEvents: [],
     battle: newBattle(powers, Math.floor(Math.random() * MONSTERS.length)),
     phase: 'ask',
     recent: [],
@@ -737,7 +742,9 @@ function submitAnswer(value) {
   const result = correct ? (g.usedHint ? 'assisted' : 'correct') : 'wrong';
   const now = Date.now();
   const rec = recordAnswer(profile(), g.word.id, result, now, g.powers);
-  let p = rec.profile;
+  const grown = friendsAfterAnswer(rec.profile, 'spelling', result, now);
+  let p = grown.profile;
+  g.friendEvents.push(...grown.events);
   g.earned.coins += rec.coins;
   g.earned.xp += rec.xp;
 

@@ -163,3 +163,9 @@ select { font: inherit; font-size: 1rem; padding: 10px; border-radius: 12px; bor
 .warn { color: #9a5b00; font-size: 0.9em; margin-top: 4px; }
 .nowrap { white-space: nowrap; }
 table.check td { vertical-align: top; }
+
+/* Friend growth (friends.js) */
+.friend-meta { display: grid; gap: 4px; margin-top: 6px; }
+.xpbar.sm { height: 8px; }
+.gt { white-space: nowrap; }
+.friend-event { font-size: 1.15rem; margin: 6px 0; }
